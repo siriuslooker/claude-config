@@ -4,14 +4,6 @@
     "type": "command",
     "command": "bash ~/.claude/hooks/statusline.sh"
   },
-  "extraKnownMarketplaces": {
-    "rd-claude-plugins": {
-      "source": {
-        "source": "directory",
-        "path": "<local-path>"
-      }
-    }
-  },
   "effortLevel": "medium",
   "tui": "fullscreen",
   "voice": {
@@ -23,7 +15,5 @@
   "agentPushNotifEnabled": true,
   "skipAutoPermissionPrompt": true,
   "voiceEnabled": false,
-  "enabledPlugins": {
-    "stack-ops@rd-claude-plugins": true
-  }
+  "enabledPlugins": {}
 }

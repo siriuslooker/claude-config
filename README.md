@@ -23,10 +23,23 @@ If you add a new tracked path, run `git add -A --dry-run` and read the list befo
 | `CLAUDE.md` | Global instructions: implementation process, ticketing, branch/PR rules, machine facts |
 | `settings.json` | Model, statusline, theme, enabled plugins |
 | `commands/` | Slash commands — session workflow (`start-session`, `save-context`, `end-session`, `init-project`), Jira (`jira-comment`, `jira-attach`, `jira-update`), plus `notify`, `deep-review`, `push-nuget` |
-| `skills/` | Personal skills — currently `authoring-stack-ops-skills` |
-| `agents/` | Personal subagents (none yet; the stack-ops agents come from a plugin) |
+| `agents/` | The **stack-ops agents**: `build`, `verify`, `compile`, `test`, `qa`, `deploy` |
+| `skills/` | Per-stack skills the agents dispatch to (`{compile,test,deploy}-{netcore,node}`, `stack-detect`, `report-handoff`, `launch-local`) plus `authoring-stack-ops-skills` |
 | `hooks/` | `statusline.sh` |
 | `tools/` | `notify.ps1` (Pushover wrapper) |
+
+### The stack-ops agents
+
+`build` implements a phase and is the only agent that writes source; `verify` is the read-only gate.
+They are stack-agnostic — a per-stack skill knows *how*. Only `netcore` and `node` are implemented;
+`netfx` is deliberately detected-but-unhandled as the worked example of that seam. To add a stack, use
+the `authoring-stack-ops-skills` skill — **add a skill, never edit an agent.**
+
+These began life as a Claude Code plugin in a separate Bitbucket repo. That was abandoned in favour of
+plain files here, because a marketplace registration bakes in an absolute path to the plugin working
+copy, and because a personal machine may have no Bitbucket access. **There is nothing to install** — a
+clone plus a `credentials.json` is a complete setup. The old
+`<work-org>/claude-agents-plugin` repo is dormant; treat this repo as the source of truth.
 
 ## Setting up a new machine
 
@@ -47,30 +60,25 @@ git checkout -f main       # tracked paths only; everything else is ignored
 
 Then, separately:
 
-1. **Recreate `credentials.json`** — it is not in the repo. Entries used by the tracked commands:
-   `"Jira API (<work-org>)"` (`password` = API token from
+1. **Recreate `credentials.json`** — it is not in the repo, and is the only thing a clone doesn't give
+   you. Entries used by the tracked commands: `"Jira API (<work-org>)"` (`password` = API token from
    id.atlassian.com/manage-profile/security/api-tokens), `"Bitbucket API (<work-org>)"`, `"Pushover"`
    (`token`, `userKey`).
-2. **Install the stack-ops plugin** — the agents referenced throughout `CLAUDE.md` live in a separate
-   repo, because installed plugins are artifacts rather than config:
-   ```
-   claude plugin marketplace add git@bitbucket.org:<work-org>/claude-agents-plugin.git
-   ```
-   Then **restart Claude Code** — agents and skills only load at startup.
-3. **Fix the machine-local path in `settings.json`.** `extraKnownMarketplaces` currently points at
-   `<local-path>`, a local directory that won't exist
-   elsewhere. Replace it with the git source above, or re-add the marketplace and let it rewrite the
-   entry. **Known wart** — see below.
-4. Install CLIs the commands assume: `gh` (GitHub), `bb` (Bitbucket), `sqlcmd` if doing DB work.
+2. **Restart Claude Code** — agents and skills only load at startup, so they won't resolve in a session
+   that was already running when you cloned.
+3. Install the CLIs the commands assume: `gh` (GitHub), `bb` (Bitbucket), `sqlcmd` for DB work.
+
+Nothing else. No plugins, no marketplaces.
 
 ## Known warts
 
-- **`settings.json` carries a machine-local absolute path** (`extraKnownMarketplaces` → the plugin
-  working copy on the `F:` drive). It's tracked because the rest of the file is genuinely portable, but
-  this key needs adjusting per machine. The clean fix is to point the marketplace at the plugin's git
-  URL, at the cost of losing live local editing of the plugin.
-- **The plugin repo is on Bitbucket**, which a personal machine may not have access to. If that becomes
-  a problem, mirror `claude-agents-plugin` to GitHub and switch the marketplace source.
-- **Nothing here is machine-agnostic by construction.** `CLAUDE.md` has a "machine facts" section with
-  things that are true of this box (no LocalDB, SSH-only Bitbucket). Review it on a new machine rather
+- **`settings.json` is portable but opinionated** — it pins the model, effort level, fullscreen TUI and
+  dark theme. Adjust per taste rather than assuming it's neutral.
+- **The agent names are bare and generic** — `build`, `verify`, `compile`, `test`, `qa`, `deploy`. They
+  lost the `stack-ops:` prefix when they stopped being plugin agents, so a project-level agent with one
+  of those names would shadow them. `build` in particular means *implement a phase*, not *compile*.
+- **Nothing here is machine-agnostic by construction.** `CLAUDE.md` has a "machine facts" section
+  describing this box (no LocalDB, SSH-only Bitbucket, an `F:` drive). Review it on a new machine rather
   than trusting it.
+- **The Jira commands are RD-specific**, keyed to `<jira-site>` and a matching
+  credentials entry. On a personal machine they're inert; GitHub Issues via `gh` is the path there.

@@ -1,9 +1,10 @@
 # User-level instructions (all projects on this machine)
 
 This file, and the `commands/`, `agents/`, `skills/`, `hooks/` and `tools/` directories beside it, are
-version-controlled at **`github.com/siriuslooker/claude-config`** (private). See `README.md` there for
-setting up a new machine. Secrets in `~/.claude` are excluded by an allowlist `.gitignore` — never
-re-admit `credentials.json`, `.credentials.json`, `history.jsonl` or `projects/`.
+version-controlled at **`github.com/siriuslooker/claude-config`** (private) — a clone plus a
+`credentials.json` is a complete setup, with no plugins or marketplaces to install. See `README.md`
+there. Secrets in `~/.claude` are excluded by an allowlist `.gitignore` — never re-admit
+`credentials.json`, `.credentials.json`, `history.jsonl` or `projects/`.
 
 ---
 
@@ -11,20 +12,21 @@ re-admit `credentials.json`, `.credentials.json`, `history.jsonl` or `projects/`
 
 **The main thread is the controller. It orchestrates; it does not write the code.**
 
-Implementation goes to the `stack-ops` agents. The point is that a subagent's context never transfers
-back — the controller reads only a capped digest — so doing the work inline both burns controller
-context and bypasses the gates.
+Implementation goes to the stack-ops agents in `agents/`. The point is that a subagent's context never
+transfers back — the controller reads only a capped digest — so doing the work inline both burns
+controller context and bypasses the gates.
 
 | Agent | Use for |
 |---|---|
-| `stack-ops:build` | Implement a phase. **The only agent that writes source.** Never touches git. |
-| `stack-ops:verify` | Read-only whole-repo gate: compile + lint + every test suite. Run before committing. |
-| `stack-ops:compile` / `test` | Narrower gates when you don't need the full pass. |
-| `stack-ops:qa` | Exercise a *running* app, when passing tests isn't the same as working. |
-| `stack-ops:deploy` | Produce and inspect deployable artifacts. Stops at the artifact. |
+| `build` | Implement a phase. **The only agent that writes source.** Never touches git. |
+| `verify` | Read-only whole-repo gate: compile + lint + every test suite. Run before committing. |
+| `compile` / `test` | Narrower gates when you don't need the full pass. |
+| `qa` | Exercise a *running* app, when passing tests isn't the same as working. |
+| `deploy` | Produce and inspect deployable artifacts. Stops at the artifact. |
 
-⚠️ **`build` means "implement the current phase", not `dotnet build`.** The compile check is `compile`;
-the gate is `verify`.
+⚠️ **`build` means "implement the current phase", not `dotnet build`.** These are deliberately bare,
+generic names now that they are user-level agents rather than namespaced plugin ones — so read the table
+above rather than assuming from the name. The compile check is `compile`; the gate is `verify`.
 
 Write `build` a precise phase brief with acceptance criteria and stop conditions. It writes source but
 **not tests** unless the brief explicitly directs it to. It will stop rather than improvise scope —
@@ -44,8 +46,8 @@ before acting on them.
 If `stack-detect` reports anything under **`Unhandled`**, or the repo's language has no `compile-*`
 skill, **stop and author the skill first** — see the **`authoring-stack-ops-skills`** skill. Do not let
 an agent substitute another stack's skill; `dotnet build` on an old-style `.csproj` fails in ways that
-look like source errors. New skills go in the plugin repo, never hand-written into `~/.claude/skills/`,
-and require a **session restart** before they resolve.
+look like source errors. New skills go in `~/.claude/skills/` beside the existing ones, and require a
+**session restart** before they resolve. Only `netcore` and `node` are implemented today.
 
 ---
 

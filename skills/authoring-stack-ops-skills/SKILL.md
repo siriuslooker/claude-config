@@ -31,15 +31,15 @@ One stack usually needs three skills: `compile-<stack>`, `test-<stack>`, `deploy
 what the task needs — `test-python` alone is a perfectly good increment if you're only running tests —
 but name it to the same pattern so the agents find it.
 
-Skills live in the plugin repo, which is the source of truth:
+Skills live alongside the agents in the version-controlled config repo:
 
 ```
-<local-path>\skills\<verb>-<stack>\SKILL.md
+~/.claude/skills/<verb>-<stack>/SKILL.md
 ```
 
-Do **not** hand-write these into `~/.claude/skills/` — that forks the tooling. Extend the plugin by
-adding skills, never by editing the agents (the agents are stack-agnostic on purpose; `netfx` is left
-detected-but-unhandled as the worked example of this seam).
+**Extend by adding skills, never by editing the agents.** The agents are stack-agnostic on purpose —
+that is the whole design. `netfx` is deliberately left detected-but-unhandled as the worked example of
+this seam.
 
 ## Step 2 — learn the toolchain from the repo, not from memory
 
@@ -109,13 +109,12 @@ must build before the .NET app that embeds it), state it in the compile skill.
 
 Skills and agents are **only loaded at startup**. After adding the files:
 
-1. `claude plugin validate` in the plugin repo.
-2. **Restart Claude Code.** The new skill will not resolve in the current session — this is the same
-   reason the stack-ops plugin itself needed a restart when it was first installed.
-3. Run `stack-ops:compile` (or `verify`) on the target repo and confirm the manifest now lists the
-   stack under `### <stack id>` rather than `### Unhandled`.
-4. Commit the plugin repo and push, so other machines get the skill:
-   `git@bitbucket.org:<work-org>/claude-agents-plugin.git`.
+1. **Restart Claude Code.** The new skill will not resolve in the current session, no matter how correct
+   the file is. Expect this; don't debug it as a failure.
+2. Run `compile` (or `verify`) on the target repo and confirm the manifest now lists the stack under
+   `### <stack id>` rather than `### Unhandled`.
+3. Commit and push `~/.claude` so other machines get the skill —
+   `github.com/siriuslooker/claude-config` (private).
 
 Then, and only then, run the agent that needed it.
 
@@ -130,5 +129,5 @@ Then, and only then, run the agent that needed it.
 - [ ] `Return this payload` template, status enum, ends `Nothing else.`
 - [ ] Payload ends with what was not verified
 - [ ] `stack-detect` gained a detection row **and** any needed exclusions
-- [ ] `claude plugin validate` clean, session restarted, manifest confirms the stack
-- [ ] Plugin repo committed and pushed
+- [ ] Session restarted, and the manifest confirms the stack is no longer `Unhandled`
+- [ ] `~/.claude` committed and pushed
