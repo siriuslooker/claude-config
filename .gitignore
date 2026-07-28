@@ -22,7 +22,12 @@
 !.gitignore
 !README.md
 !CLAUDE.md
+# Per-host facts, imported by CLAUDE.md. Tracked on purpose: an absent import
+# target is undocumented behaviour, and a tracked file can never dangle.
+!CLAUDE.machine.md
 !settings.json
+!setup.ps1
+!setup.sh
 
 !commands/
 !commands/**

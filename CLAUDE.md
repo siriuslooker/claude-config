@@ -1,10 +1,15 @@
-# User-level instructions (all projects on this machine)
+# User-level instructions (every project, this profile)
 
 This file, and the `commands/`, `agents/`, `skills/`, `hooks/` and `tools/` directories beside it, are
 version-controlled at **`github.com/siriuslooker/claude-config`** (private) — a clone plus a
 `credentials.json` is a complete setup, with no plugins or marketplaces to install. See `README.md`
 there. Secrets in `~/.claude` are excluded by an allowlist `.gitignore` — never re-admit
 `credentials.json`, `.credentials.json`, `history.jsonl` or `projects/`.
+
+**Keep this file machine-agnostic.** It is shared across every machine this profile is cloned to, so
+anything true of only one host belongs in `CLAUDE.machine.md`, and anything requiring particular network
+access belongs under "Access preconditions" with its precondition stated. A fact that is true
+everywhere — even one discovered on a single machine — belongs here as a general rule.
 
 ---
 
@@ -161,12 +166,33 @@ terminal is unfocused and needs Remote Control for phone delivery.
 
 ---
 
-## Miscellaneous machine facts
+## General cautions (true anywhere, learned the hard way)
 
-- **No SQL Server LocalDB on this machine** — only a full SQL Server 2025 default instance
-  (`MSSQLSERVER`). Connection strings assuming `(localdb)\MSSQLLocalDB` will not resolve; override via
-  environment variable or user-secrets rather than editing a tracked settings file. LocalDB ships with
-  Visual Studio and SQL Express, *not* with a full SQL Server install.
-- **Clone Bitbucket repos over SSH, not HTTPS.** HTTPS prompts for credentials and hangs in a
-  non-interactive shell with no error.
-- **`/push-nuget`** pushes a built `.nupkg` to the private `<nuget-feed>` feed (VPN required, gated).
+- **Clone over SSH, not HTTPS.** An HTTPS clone or `ls-remote` prompts for credentials and then *hangs
+  with no error* in a non-interactive shell. This looks like a network problem and isn't.
+- **LocalDB is not part of a full SQL Server install.** It ships with Visual Studio and SQL Express, so
+  a box with a full SQL Server can still have no `(localdb)\MSSQLLocalDB`. Check with `sqllocaldb info`
+  — if the command isn't found, it isn't there. When a tracked connection string assumes LocalDB,
+  **override it** via an environment variable or user-secrets rather than editing the tracked file,
+  which is correct for machines that do have it.
+- **CLI tools can serve stale reads.** `bb` caches API responses and will report a deleted repository as
+  still existing until `bb cache clear`. When remote state matters, confirm with something
+  authoritative (`git ls-remote`) rather than a convenience wrapper.
+- **Don't trust a 2xx as proof a write landed.** See the Jira note above; re-read after writing.
+
+## Access preconditions
+
+Some tooling needs network access a given machine may not have. State the precondition rather than
+retrying blindly, and say plainly when it's unavailable:
+
+- **`/push-nuget`** → the private `<nuget-feed>` feed. **Requires the RD VPN.**
+- **Jira commands, and `bb`** → RD Bitbucket/Atlassian. Unavailable on a personal machine; on those,
+  GitHub Issues via `gh` is the path.
+
+---
+
+## Machine-specific facts
+
+Anything true of one machine and not another lives in a separate file, so this one stays portable:
+
+@~/.claude/CLAUDE.machine.md
