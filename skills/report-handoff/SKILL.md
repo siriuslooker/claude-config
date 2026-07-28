@@ -20,7 +20,7 @@ whether the run passed, the digest failed at its only job.
 
 **Tier 1 — the report file.** Everything: every error, every failing test, warnings, timings,
 excerpts, log paths. Length is free here. Write to `.claude/stack-ops/<verb>-report.md`
-(`build-report.md`, `qa-report.md`, …). Overwrite the previous run; it's scratch, and it's
+(`implement-report.md`, `qa-report.md`, …). Overwrite the previous run; it's scratch, and it's
 gitignored. Structure it with stable `##` headings and keep one finding per line so the caller can
 grep it and read a range instead of the whole file.
 
@@ -54,7 +54,7 @@ Pass:
 ```markdown
 ## Build gate: PASS — netcore ✓ node ✓ (compile+lint), 0 tests
 Not covered: no test harness in either stack; no e2e.
-Detail: .claude/stack-ops/build-report.md
+Detail: .claude/stack-ops/implement-report.md
 ```
 
 Fail:
@@ -66,7 +66,7 @@ Fail:
 2. 12 further CS0234 in the same file — same root cause
 
 Not covered: tests skipped (build red). 2 of 13 errors shown.
-Detail: .claude/stack-ops/build-report.md  •  Log: .claude/stack-ops/compile-netcore.log
+Detail: .claude/stack-ops/implement-report.md  •  Log: .claude/stack-ops/compile-netcore.log
 ```
 
 ## One more lever

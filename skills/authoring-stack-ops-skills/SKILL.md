@@ -1,11 +1,11 @@
 ---
 name: authoring-stack-ops-skills
-description: Write a new per-stack skill for the stack-ops agents when a repository uses a stack they don't yet handle (Python, Go, Rust, .NET Framework, Java, Ruby…). Use BEFORE running the build/compile/test/qa/deploy/verify agents on such a repo — they must not substitute another stack's skill. Also use when stack-detect reports anything under "Unhandled".
+description: Write a new per-stack skill for the stack-ops agents when a repository uses a stack they don't yet handle (Python, Go, Rust, .NET Framework, Java, Ruby…). Use BEFORE running the implement/compile/test/qa/deploy/verify agents on such a repo — they must not substitute another stack's skill. Also use when stack-detect reports anything under "Unhandled".
 ---
 
 # Authoring a stack-ops per-stack skill
 
-The `stack-ops` agents (`build`, `compile`, `test`, `qa`, `deploy`, `verify`) are deliberately
+The stack-ops agents (`implement`, `compile`, `test`, `qa`, `deploy`, `verify`) are deliberately
 **stack-agnostic**. They decide *what* to do; a per-stack skill knows *how*. Today only two stacks are
 implemented — `netcore` and `node` — so the first time a repo uses anything else, the skill has to be
 written before an agent can do useful work.

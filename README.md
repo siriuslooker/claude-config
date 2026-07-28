@@ -23,14 +23,15 @@ If you add a new tracked path, run `git add -A --dry-run` and read the list befo
 | `CLAUDE.md` | Global instructions: implementation process, ticketing, branch/PR rules, machine facts |
 | `settings.json` | Model, statusline, theme, enabled plugins |
 | `commands/` | Slash commands — session workflow (`start-session`, `save-context`, `end-session`, `init-project`), Jira (`jira-comment`, `jira-attach`, `jira-update`), plus `notify`, `deep-review`, `push-nuget` |
-| `agents/` | The **stack-ops agents**: `build`, `verify`, `compile`, `test`, `qa`, `deploy` |
+| `agents/` | The **stack-ops agents**: `implement`, `verify`, `compile`, `test`, `qa`, `deploy` |
 | `skills/` | Per-stack skills the agents dispatch to (`{compile,test,deploy}-{netcore,node}`, `stack-detect`, `report-handoff`, `launch-local`) plus `authoring-stack-ops-skills` |
 | `hooks/` | `statusline.sh` |
 | `tools/` | `notify.ps1` (Pushover wrapper) |
 
 ### The stack-ops agents
 
-`build` implements a phase and is the only agent that writes source; `verify` is the read-only gate.
+`implement` writes the code for a planned phase and is the only agent that writes source; `verify` is
+the read-only gate.
 They are stack-agnostic — a per-stack skill knows *how*. Only `netcore` and `node` are implemented;
 `netfx` is deliberately detected-but-unhandled as the worked example of that seam. To add a stack, use
 the `authoring-stack-ops-skills` skill — **add a skill, never edit an agent.**
@@ -74,9 +75,10 @@ Nothing else. No plugins, no marketplaces.
 
 - **`settings.json` is portable but opinionated** — it pins the model, effort level, fullscreen TUI and
   dark theme. Adjust per taste rather than assuming it's neutral.
-- **The agent names are bare and generic** — `build`, `verify`, `compile`, `test`, `qa`, `deploy`. They
-  lost the `stack-ops:` prefix when they stopped being plugin agents, so a project-level agent with one
-  of those names would shadow them. `build` in particular means *implement a phase*, not *compile*.
+- **The agent names are bare and generic** — `implement`, `verify`, `compile`, `test`, `qa`, `deploy`.
+  They lost the `stack-ops:` prefix when they stopped being plugin agents, so a project-level agent with
+  one of those names would shadow them. (`implement` was called `build` until the name proved
+  confusing — it reads as *compile*, which is a different agent entirely.)
 - **Nothing here is machine-agnostic by construction.** `CLAUDE.md` has a "machine facts" section
   describing this box (no LocalDB, SSH-only Bitbucket, an `F:` drive). Review it on a new machine rather
   than trusting it.

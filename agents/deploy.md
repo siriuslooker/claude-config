@@ -28,7 +28,7 @@ You prepare a deployment and report precisely what would ship. Per-stack know-ho
 
 ## Procedure
 
-1. **Gate on the build.** Follow the `build` agent's gate, or at minimum every `compile-*` skill.
+1. **Gate on the build.** Follow the `verify` agent's gate, or at minimum every `compile-*` skill.
    Never produce a deploy artifact from code you have not seen compile. Failing tests are the
    caller's call to override — but you report them, and you say they were overridden.
 2. **Detect** — invoke `stack-detect`.

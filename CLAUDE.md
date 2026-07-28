@@ -18,17 +18,17 @@ controller context and bypasses the gates.
 
 | Agent | Use for |
 |---|---|
-| `build` | Implement a phase. **The only agent that writes source.** Never touches git. |
+| `implement` | Write the code for a planned phase. **The only agent that writes source.** Never touches git. |
 | `verify` | Read-only whole-repo gate: compile + lint + every test suite. Run before committing. |
 | `compile` / `test` | Narrower gates when you don't need the full pass. |
 | `qa` | Exercise a *running* app, when passing tests isn't the same as working. |
 | `deploy` | Produce and inspect deployable artifacts. Stops at the artifact. |
 
-⚠️ **`build` means "implement the current phase", not `dotnet build`.** These are deliberately bare,
-generic names now that they are user-level agents rather than namespaced plugin ones — so read the table
-above rather than assuming from the name. The compile check is `compile`; the gate is `verify`.
+There is deliberately **no agent called `build`** — it was renamed to `implement` precisely because
+"build" reads as *compile* and the agent does no such thing. The compile check is `compile`; the gate
+is `verify`.
 
-Write `build` a precise phase brief with acceptance criteria and stop conditions. It writes source but
+Write `implement` a precise phase brief with acceptance criteria and stop conditions. It writes source but
 **not tests** unless the brief explicitly directs it to. It will stop rather than improvise scope —
 that's correct behaviour, not a failure.
 
@@ -37,7 +37,7 @@ touch git.
 
 **Two rules the agents follow, which you should trust but still spot-check:** absence is never smoothed
 into a pass (no harness, zero tests discovered, a placeholder script each get their own named outcome),
-and detail goes to `.claude/stack-ops/<verb>-report.md` with a capped reply. Their reports are usually
+and detail goes to `.claude/stack-ops/<verb>-report.md` (e.g. `implement-report.md`) with a capped reply. Their reports are usually
 accurate but not infallible — verify claims about repo state (e.g. "that file is gitignored") yourself
 before acting on them.
 
