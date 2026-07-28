@@ -20,6 +20,7 @@
 # 2. Re-admit the config we publish. Directories need both the dir and its
 #    contents un-ignored, hence the /** entries.
 !.gitignore
+!.gitattributes
 !README.md
 !CLAUDE.md
 # Per-host facts, imported by CLAUDE.md. Tracked on purpose: an absent import

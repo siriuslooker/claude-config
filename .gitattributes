@@ -1,0 +1,11 @@
+# setup.sh runs on macOS and Linux. If it ever checks out with CRLF, it fails
+# with "bad interpreter: /bin/bash^M" — an error that gives no hint of the cause.
+# Pin it to LF regardless of the checking-out machine's core.autocrlf.
+*.sh text eol=lf
+
+# Markdown and JSON are read by tools that don't care; leave them to normalise.
+*.md text
+*.json text
+
+# PowerShell tolerates LF, but keep it CRLF on Windows for editor sanity.
+*.ps1 text
