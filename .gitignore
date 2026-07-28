@@ -1,0 +1,51 @@
+# ~/.claude is a live runtime directory that holds SECRETS and full session
+# transcripts. This file is therefore an ALLOWLIST, not a blocklist:
+#
+#   1. ignore everything
+#   2. re-admit only the specific config paths we intend to publish
+#
+# Written this way on purpose. A blocklist would mean that any secret file a
+# future Claude Code version drops in here gets committed until someone notices.
+# With an allowlist, anything new is excluded by default and has to be admitted
+# deliberately.
+#
+# NEVER re-admit: credentials.json, .credentials.json (Claude auth),
+# history.jsonl, projects/ (session transcripts + per-machine memory),
+# sessions/, tasks/, jobs/, keystores/, session-env/, paste-cache/, debug/,
+# daemon.log, shell-snapshots/, file-history/.
+
+# 1. Ignore everything.
+*
+
+# 2. Re-admit the config we publish. Directories need both the dir and its
+#    contents un-ignored, hence the /** entries.
+!.gitignore
+!README.md
+!CLAUDE.md
+!settings.json
+
+!commands/
+!commands/**
+
+!agents/
+!agents/**
+
+!skills/
+!skills/**
+
+!hooks/
+!hooks/**
+
+!tools/
+!tools/**
+
+# 3. Belt and braces: even if a path above is widened later, these can never be
+#    committed. Order matters — these come after the re-admissions.
+credentials.json
+.credentials.json
+*.key
+*.pem
+*.pfx
+*secret*
+*token*
+settings.local.json

@@ -1,0 +1,29 @@
+{
+  "model": "opus",
+  "statusLine": {
+    "type": "command",
+    "command": "bash ~/.claude/hooks/statusline.sh"
+  },
+  "extraKnownMarketplaces": {
+    "rd-claude-plugins": {
+      "source": {
+        "source": "directory",
+        "path": "<local-path>"
+      }
+    }
+  },
+  "effortLevel": "medium",
+  "tui": "fullscreen",
+  "voice": {
+    "enabled": false,
+    "mode": "hold"
+  },
+  "skipDangerousModePermissionPrompt": true,
+  "theme": "dark",
+  "agentPushNotifEnabled": true,
+  "skipAutoPermissionPrompt": true,
+  "voiceEnabled": false,
+  "enabledPlugins": {
+    "stack-ops@rd-claude-plugins": true
+  }
+}
