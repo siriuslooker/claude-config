@@ -15,7 +15,10 @@ Do **not** shell out to a recursive `find`. Use Glob, and always exclude `node_m
 `bin/`, `obj/`, `dist/`, `.git/`, and vendored or read-only reference checkouts (a nested
 `.git`, or paths the project's `.claude/settings.json` `deny`-lists).
 
-Run these globs and classify:
+Run these globs and classify. Exclude the usual artifact/vendor directories, and for an Expo
+repo also exclude the **generated** native projects — `**/ios/Pods/`, `**/ios/build/`,
+`**/android/build/`, `**/android/.gradle/`, `**/.expo/` — which contain their own manifests and
+would otherwise be classified as separate stacks.
 
 | Glob | Then check | Stack id | Skills |
 |---|---|---|---|
@@ -23,6 +26,15 @@ Run these globs and classify:
 | `**/*.csproj`, `**/*.fsproj`, `**/*.vbproj` | contains `Sdk="Microsoft.NET.Sdk*"` **and** `<TargetFramework>net5.0`+ | `netcore` | `compile-netcore`, `test-netcore`, `deploy-netcore` |
 | `**/*.csproj` | contains `<TargetFrameworkVersion>` (old-style, no `Sdk=` attribute) | `netfx` | *(none installed — see "Unhandled stacks")* |
 | `**/package.json` | not under `node_modules/`; has a `scripts` block | `node` | `compile-node`, `test-node`, `deploy-node` |
+| `**/app.json`, `**/app.config.{js,ts}` | has an `expo` key (or exports an Expo config) **and** `expo` in that package's dependencies | `expo-ios` | `compile-expo-ios`, `qa-expo-ios` |
+| ↑ same manifest | as above | `expo-android` | `compile-expo-android`, `qa-expo-android` |
+
+**An Expo package is ALSO a `node` stack — report both.** `compile-node`/`test-node` own its
+`typecheck`/`test`/`lint` scripts; the `expo-*` skills own only the native artifact and on-device
+behaviour. They are additive, not alternatives, and the JS suites must still run through `node`.
+Report `expo-ios` only if the manifest is iOS-capable (an `ios` block, or no platform restriction);
+likewise `expo-android`. Note the native project directories (`ios/`, `android/`) are usually
+**generated and gitignored** — their absence is normal and is not evidence the platform is unsupported.
 
 For each detected stack record:
 

@@ -119,6 +119,11 @@ Follow these in **every** session, for **every** repo, without being reminded.
   no matter how small — requires a feature branch.** Create the branch *before* making the change; if
   you only realize after the fact, move the changes to a feature branch and reset the protected branch
   back to its upstream.
+  - **ONE STANDING EXCEPTION — this repo (`claude-config`, i.e. `~/.claude` itself): commit directly to
+    the default branch.** Granted by the user 2026-07-29. The reason is propagation: a feature branch
+    means other machines don't get an agent/skill/command change until a PR merges, which defeats the
+    point of a shared profile. Pushing still needs approval like anywhere else — the exception is about
+    *branching*, not about pushing unasked. **This applies to no other repo.**
 - **Branch source:** `git fetch` first. If the repo has **`origin/development`**, cut from it; otherwise
   cut from `main`/`master`.
 - **Branch name = `<ticket>-<summary>`.**
