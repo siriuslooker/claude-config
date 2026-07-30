@@ -55,6 +55,48 @@ anything it says.**
   second one.** Check what is booted before and after (`xcrun simctl list devices booted`).
 - Verify an install actually replaced the binary — a silent no-op means you are QA-ing stale code.
 
+## 🔴 PREFLIGHT — run these THREE checks before installing or driving anything
+
+Every past failure of this rig looked like "the driver is broken" and was actually one of three
+operational faults. They are indistinguishable from a dead rig once you are mid-pass, and each has cost a
+whole pass. **Assert all three first, report what you found, and stop with `VIEWER_UNAVAILABLE` if any
+fails** — do not diagnose your way forward.
+
+```
+# 1. EXACTLY ONE driver, and it must carry the UDID argument
+ssh <host> "pgrep -fl '[s]erve-sim' | cat"
+#   → expect exactly ONE line, and the UDID must appear in it.
+#   Two instances: the second silently falls back to the next port (3201) and you drive nothing.
+#   No UDID argument: the preview starts but never attaches, so /ax has nothing to report —
+#   a live-looking preview with no way to drive anything. The UDID is NOT optional.
+
+# 2. The endpoint answers FROM YOUR MACHINE, not from the host's localhost
+curl -s -m 5 -o /dev/null -w "%{http_code}\n" http://<host>:<port>/api      # expect 200
+
+# 3. EXACTLY ONE booted device, and it is the one you mean
+ssh <host> "xcrun simctl list devices booted | cat"
+#   → expect one Booted line whose UDID matches check 1.
+```
+
+⚠️ **Do not assume the port.** One process serves both the preview UI and `/ax` in the foreground/launchd
+topology; a different port is the helper default in detached mode. Probing the wrong one looks exactly
+like a dead rig. Ask `/api` rather than guessing.
+
+### The human must be able to watch — say how
+
+**Report the preview URL** (`http://<host>:<port>`) in your first message, before the pass starts. A
+correct-but-unwatched pass is not an acceptable outcome: the requester has said so explicitly, for two
+reasons that have both bitten — a human can rescue an agent that has driven to the wrong screen in
+seconds, and several QA conclusions here have been wrong in ways that watching would have caught cheaply.
+
+**Also record video for the report.** It costs nothing and turns "trust me" into evidence:
+
+```
+xcrun simctl io <UDID> recordVideo --codec h264 <path>.mp4      # stop with SIGINT
+```
+
+Attach or reference the file, and say plainly if you could not capture it.
+
 ## Transport — get this right or QA is unusably slow
 
 The driver runs on a remote host, so **how** you reach it dominates wall-clock. Three costs stack per
@@ -177,6 +219,8 @@ leave it as you found it.
 - **Build under test:** <version / build number> • **Artifact mtime:** <mtime>
 - **Install:** <upgrade | fresh> • **Data container preserved:** <yes | NO — say what was lost>
 - **Device:** <simulator model / iOS version / UDID>
+- **Preflight:** driver instances <n, expect 1> carrying UDID <yes> • `/api` <200> • booted devices <n, expect 1>
+- **Watchable at:** <preview URL, stated so the requester can watch> • **Video:** <path | NOT captured, why>
 - **Driver restarted after install:** <yes | n/a> • **Tree matched live screen:** <yes>
 - **Scope exercised:** <screens / flows>
 - **Dynamic Type sizes:** <list> • **Themes:** <list>
