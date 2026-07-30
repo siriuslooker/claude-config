@@ -86,23 +86,31 @@ seconds, where blind it burns the pass and sometimes reports a navigation mistak
 several QA conclusions on this project have been wrong or misattributed, so watching is the cheap
 sanity check that stops a bad claim propagating.
 
-**Order of preference:**
+### ✅ RESOLVED 2026-07-30 — an interactive `scrcpy` window and a live MCP session DO coexist
 
-1. **`mcp__android__start_video_stream`** — the safe default. It shares the MCP server's existing
-   `scrcpy-server` connection, so it **cannot** contend for the encoder session, and input stays on
-   the fast MCP driver. Stop it with `stop_video_stream` in teardown.
-2. **A real interactive `scrcpy` window** — better, when it works, because the human can take the
-   mouse and correct you:
-   ```
-   scrcpy -s <serial> --stay-awake --max-size 900 --window-title "QA"
-   ```
+This was flagged "untested" three times and is now tested. **Use both.** A visible, interactive window
+is the better viewer because the human can take the mouse and correct an agent that has driven
+somewhere wrong.
 
-⚠️ **Known constraint, still untested:** there is **one scrcpy encoder session per device**, so a
-manual `scrcpy` window and an active scrcpy-mcp session **may** conflict. Do not resolve this by
-falling back to `stop_session` + plain adb — that collides with the hard rule below that raw adb
-cannot be substituted for the MCP driver on keyboard, drag or layout work. So: use (1) unless asked
-otherwise, and **if you do test (2) alongside a live session, record the answer here** rather than
-leaving it to be rediscovered a fourth time.
+```
+mcp__android__start_session   # first
+scrcpy -s <serial> --stay-awake --max-size 900 --window-title "QA"
+```
+
+**What was verified** (scrcpy **4.0**, Samsung A53 / Android 16, one device): with the window open and
+responding, `screenshot` still returned `"source":"scrcpy"` — i.e. the MCP **fast path**, not a
+degraded fallback — and `app_start` plus `ui_find_element` both worked normally, returning correct
+bounds. So the feared per-device encoder contention **does not bite** for this pairing. Note the
+versions: if this ever regresses, suspect a scrcpy or scrcpy-mcp upgrade and re-test rather than
+assuming the constraint was always real.
+
+**Fallback if a future version does conflict:** `mcp__android__start_video_stream`, which shares the
+MCP server's existing `scrcpy-server` connection and so structurally cannot contend — a passive view,
+but still a view. Stop it with `stop_video_stream` in teardown.
+
+⚠️ **Do not resolve any viewer conflict by falling back to `stop_session` + plain adb.** That collides
+with the hard rule below: raw adb cannot substitute for the MCP driver on keyboard, drag or layout
+work.
 
 Tool discipline:
 
