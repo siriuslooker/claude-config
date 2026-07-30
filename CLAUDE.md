@@ -160,6 +160,40 @@ Follow these in **every** session, for **every** repo, without being reminded.
 
 ---
 
+## Long-running work — run it from the MAIN thread
+
+**Start long work (builds, full test sweeps, deploys) from the main thread with the Bash tool's
+`run_in_background`, not from inside a subagent.** The harness re-invokes whoever launched the background
+task. A subagent that starts a build and ends its turn hands the completion notification to *itself*, so
+the main thread learns nothing and falls back to polling — which is exactly how several Android and iOS
+builds finished unnoticed on 2026-07-30. Delegate the *judgement* about a build to an agent if you like,
+but own the waiting.
+
+Two supporting rules, both learned the same day:
+
+- **Never decide "is it still running?" from a process name.** `pgrep -f <pattern>` matches its own
+  invoking shell, and the usual `[p]attern` fix only excludes the matcher — it still matches any other
+  process carrying the string, such as a second monitor. One watcher reported `BUILDING` for thirty
+  minutes after the build had finished. **Key on artefacts instead:** log mtime and byte size, compiler
+  CPU, output artefact mtime. A log that stopped growing ten minutes ago is finished whatever `pgrep`
+  says, and its last line says whether it succeeded.
+- **Read an artefact's identity from the artefact.** Don't install a build somewhere just to ask what
+  version it is — the file already knows.
+
+**`tools/run-notify.ps1`** wraps a command and Pushovers the outcome (label, exit code, duration), for the
+case no harness plumbing can fix: nobody is at the terminal. It passes output straight through and exits
+with the wrapped command's code, so it is safe to insert anywhere. Failures escalate to priority 1.
+
+```
+pwsh -NoProfile -File "$HOME/.claude/tools/run-notify.ps1" -Label "Android build" -Run @'
+wsl -d Ubuntu-24.04 -u root -- bash -lc 'bash /mnt/f/.../build.sh'
+'@
+```
+
+It takes the command as **one string** (`-Run`), not trailing arguments — PowerShell would otherwise bind
+any `-flag` in the wrapped command to the script's own parameters, and a bare `--` is consumed by the
+parser before the script runs. Use a single-quoted here-string when the command contains quotes.
+
 ## Notifications
 
 **Pushover** reaches the phone/desktop regardless of terminal focus: `/notify <message>`, or
