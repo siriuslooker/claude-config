@@ -95,10 +95,22 @@ Two traps when watching a build:
 - **Output can buffer through a `wsl -- bash -lc` pipe** — the capture file can sit at 0 bytes while
   Gradle is demonstrably running. Line-buffer the script's output (`stdbuf -oL`, or a pty wrapper) if you
   need live stage markers, or accept that you get nothing until exit.
-- **`pgrep -f "<pattern>"` matches its own invoking shell** when the pattern appears in the command
-  string — a liveness check written that way never fires. Use a pattern that cannot match the matcher
-  (`[b]uild.sh`) or key on something else (gradle PID, APK mtime). **Verify a watcher actually fires
-  before trusting it.**
+- **Do NOT decide "is it still building?" from a process name — match on evidence of work instead.**
+  Two distinct failures bite here, and the well-known one is the lesser:
+  - `pgrep -f "<pattern>"` matches **its own invoking shell** when the pattern appears in the command
+    string, so the check never fires. The usual fix is a pattern that cannot match the matcher
+    (`[b]uild.sh`).
+  - **That fix is not enough.** The bracket trick only excludes the matcher itself — it still matches
+    *any other* process whose command line contains the string, such as a second agent monitoring the
+    same build, or an ssh command with the tool name in it. Observed costing 30 minutes: a watcher
+    reported `BUILDING` for half an hour after the build had finished, because it was matching another
+    monitor's command line rather than a compiler.
+  - **Key on artefacts, not names:** the build log's mtime and byte size, compiler CPU
+    (`ps -Ao pid,%cpu,comm | grep -E "[s]wift-frontend|[c]lang"`), or the output artefact's mtime. A
+    log that stopped growing ten minutes ago is finished, whatever `pgrep` says — and the log's last
+    line tells you whether it succeeded.
+  **Verify a watcher actually fires before trusting it**, and cross-check a long "still running" claim
+  against the log mtime before reporting it.
 
 ## Absence and failure get their own named outcomes
 

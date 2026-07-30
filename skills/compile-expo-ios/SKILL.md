@@ -128,6 +128,24 @@ Neither error mentions Expo, so it reads as a code bug and is not one. **Check w
 `expo-dev-client` is in the manifest before ever suggesting Debug.** If it is absent, Debug is not an
 option — say so rather than offering it.
 
+**Judge "still building?" from evidence tied to THIS run.** Two ways to get this wrong, both observed on
+this project in one day:
+
+1. **Process names lie.** `pgrep -f xcodebuild` matches any other process carrying that string — a second
+   monitor, an ssh invocation — so it reports `BUILDING` long after the build ended. Cost 30 minutes.
+2. **Stale files lie in the opposite direction.** A watcher keyed on a *fixed log path* found a log from a
+   previous build, saw it not growing, and declared the build finished — while `clang` was at 77% CPU.
+   **A stale file and a finished build are indistinguishable by size alone.**
+
+**The rule: tie the signal to the current run, and record a baseline before you start.**
+- Capture the **existing artefact's mtime before building**, then watch for it to advance past that
+  baseline. A new artefact is unambiguous; "a file exists" is not.
+- Confirm any log you watch has an mtime **after the build started** before trusting its contents.
+- Use compiler CPU (`ps -Ao pid,%cpu,comm | grep -E "[s]wift-frontend|[c]lang"`) as the liveness check —
+  it was the signal that exposed both mistakes above.
+- Distinguish the two failure shapes: **compilers gone AND no new artefact** means it died; **compilers
+  gone AND a new artefact** means it finished. Only then read the log's last line for the verdict.
+
 Timing: expect ~1–2 min incremental, ~8–30 min cold (much longer if the project sets
 `buildReactNativeFromSource`). Cold builds exceed a foreground tool timeout — run them backgrounded and
 **never write "I'll wait for it" and end your turn.** End with an explicit

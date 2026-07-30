@@ -55,15 +55,58 @@ anything it says.**
   second one.** Check what is booted before and after (`xcrun simctl list devices booted`).
 - Verify an install actually replaced the binary — a silent no-op means you are QA-ing stale code.
 
+## Transport — get this right or QA is unusably slow
+
+The driver runs on a remote host, so **how** you reach it dominates wall-clock. Three costs stack per
+action, and they are separable. Measured on this setup: an ssh round trip ≈ **0.33s**, `npx <tool>`
+adds **1–3s** of package resolution, and a direct HTTP read from the client machine is **11–41ms**.
+Hundreds of actions later, that is the difference between minutes and an hour.
+
+**1. READS go straight over HTTP from your own machine — never over ssh.** The accessibility tree, app
+state and config are plain HTTP and are reachable directly. Since the stability rule below means every
+action is followed by *two* tree polls, reads are the bulk of the traffic and the biggest win:
+
+```
+curl -s -m 5 "http://<host>:<port>/ax?device=<UDID>"        # SSE — the -m is required
+curl -s -m 4 "http://<host>:<port>/api"                     # the contract: endpoints, binary path, token
+```
+
+**Do NOT ssh in to curl localhost** — that pays a full handshake to fetch something already exposed.
+
+**2. NEVER invoke the CLI through `npx`.** It re-resolves the package on every call. Ask `/api` for the
+resolved binary path and call it directly.
+
+**3. BATCH each action with its settle and its read into ONE remote call.** `tap` → sleep → read tree
+is one invocation, not three round trips.
+
+**4. Raw input WebSockets are a last resort.** The exec channel authenticates with a token and accepts
+input frames, and it *is* the fastest path — but it bypasses the CLI's validation, and an agent that
+sent unnormalized pixel coordinates down it **crashed the driver and destroyed the session**. If you use
+it, normalize coordinates exactly as the CLI would.
+
 ## Driving the simulator
 
 - **Input coordinates are NORMALIZED 0..1.** Convert from points by dividing by the screen's point
   dimensions. Bypassing the CLI to send raw pixel coordinates to the underlying helper socket **crashes
   the helper** and loses the session.
-- **Two driver processes have distinct roles**, and confusing them is a known trap: the **helper** owns
-  the device session and serves the accessibility tree plus input; the **preview** is only a web UI a
-  human watches. A `--list` may report the preview's port while the helper you need is elsewhere.
-  Killing the helper believing it redundant removes device attachment entirely.
+- **Determine the driver's TOPOLOGY before assuming a port — do not guess.** Drivers of this kind run
+  in either of two shapes, and they expose the accessibility tree in different places:
+  - **Foreground / service-managed (one process):** it serves **both** the human-facing preview UI
+    **and** the accessibility tree **on the same port**.
+  - **Detached daemon (two processes):** a **helper** owns the device session and serves the tree plus
+    input on its own port, while the **preview** is a separate web UI.
+
+  Probing the wrong port returns nothing and **looks exactly like a dead rig**, which has sent people
+  restarting a perfectly healthy driver. Check the tool's own `--help` for its port defaults and check
+  which mode is actually running, then probe. In the two-process shape, a `--list` may report the
+  preview's port while the helper you need is elsewhere — and killing the helper believing it redundant
+  removes device attachment entirely.
+- **Exactly one driver instance.** Two racing instances will silently fall back to alternate ports, and
+  the resulting symptoms are indistinguishable from a broken rig. Confirm the process count before
+  concluding anything is wrong.
+- **The device identifier is usually not optional.** Started without one, a driver may bring up the
+  preview but never attach to a device — a live-looking UI with an empty tree and no way to drive
+  anything.
 - **The accessibility tree has a one-poll lag** after any tap or scroll: the first fetch returns the
   pre-action frame, the next returns the settled one. **Treat only frames stable across ≥2 consecutive
   polls as ground truth, and cross-check against a screenshot.**
@@ -76,9 +119,16 @@ anything it says.**
 
 ## What to actually exercise
 
-- **Both themes**, if the app has them, and **both orientations** if supported.
-- **Dynamic Type** — `xcrun simctl ui <UDID> content_size <size>`. Sweep at least default, one mid size,
-  and the largest accessibility size. This is where layout defects concentrate.
+- **Dynamic Type is not optional, and default-only testing is how clipping defects reach production one
+  at a time.** `xcrun simctl ui <UDID> content_size <size>`. **Always sweep at least default, one mid
+  size, and the largest accessibility size** — and report the size alongside every layout finding, since
+  a frame measured at one size says nothing about another. Where an app's users skew older, large text is
+  a normal accommodation for a substantial share of them, not an edge case.
+- **Both orientations, if the app supports them** — check first whether it is orientation-locked
+  (`orientation` in the Expo config); if it is, say so rather than reporting landscape as untested.
+  Landscape leaves much less vertical room, so **keyboard occlusion and docked footers are materially
+  worse there** — test those specifically rather than assuming portrait findings carry over.
+- **Both themes**, if the app has them.
 - **Distinguish clipping from corruption.** Text that is *vertically clipped* by a fixed-height container
   looks like broken glyph rendering in a screenshot and is not. The tell: the same string renders fine in
   a *flexible* container at the same size. Call it a layout-constraint defect, because "corrupted glyphs"
