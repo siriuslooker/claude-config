@@ -184,6 +184,17 @@ terminal is unfocused and needs Remote Control for phone delivery.
   still existing until `bb cache clear`. When remote state matters, confirm with something
   authoritative (`git ls-remote`) rather than a convenience wrapper.
 - **Don't trust a 2xx as proof a write landed.** See the Jira note above; re-read after writing.
+- **Git Bash rewrites Unix-looking argv into Windows paths, which silently breaks `wsl` and `docker`
+  calls.** Running `wsl -d Ubuntu-24.04 -u root -- /opt/android-sdk/.../aapt2 …` from the Bash tool failed
+  with `/bin/bash: C:/Program Files/Git/opt/android-sdk/.../aapt2: No such file or directory` — MSYS
+  translated the *guest* path against the Git installation prefix before `wsl` ever saw it. Globs get
+  mangled the same way, so a `ls /opt/.../*/binary` that returns nothing is **not** evidence the binary is
+  absent. **Fix: put the whole guest-side command inside a quoted `bash -lc '…'`**, so the path is never an
+  argv element on the Windows side — or set `MSYS_NO_PATHCONV=1`. This looks exactly like a missing file and
+  isn't.
+- **Prefer reading an artifact's identity from the artifact, not from the machine you installed it on.**
+  Build metadata (a version, a bundled string) can be read out of the built file directly; installing it
+  first to interrogate the device mutates state to answer a question the file already answers.
 
 ## Access preconditions
 

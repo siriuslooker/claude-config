@@ -68,24 +68,41 @@ advanced.
 ## Driving the device
 
 The device is driven by the **scrcpy-mcp** MCP server (tools `mcp__android__*`; load schemas via
-ToolSearch). Prefer the **real `scrcpy` executable** for the viewer rather than a video-stream tool that
-pipes MJPEG into a passive player: an interactive window lets a human grab the mouse and correct an agent
-that has driven to the wrong place, which has been needed repeatedly.
+ToolSearch).
 
-```
-scrcpy -s <serial> --stay-awake --max-size 900 --window-title "QA"
-```
+### 🔴 A VIEWER IS MANDATORY — a headless pass is a FAILURE, not a fast option
 
-⚠️ **Unresolved constraint — do not assume either way.** There is **one scrcpy encoder session per
-device**, so a manual `scrcpy` window and an active scrcpy-mcp session **may** conflict; this has never
-been tested. Two workable shapes:
+**The human must be able to watch the run.** This is a standing requirement, not a preference.
+Establish the viewer **before** you install or drive anything, and **tell the caller how to watch**
+(the window is open / here is the URL) — do not assume they will find it.
 
-1. Manual `scrcpy` for the view **plus `stop_session`**, letting input fall back to plain adb — always
-   safe, but markedly slower.
-2. Both at once, *if* they coexist.
+This paragraph used to say "prefer" a viewer and left the constraint below unresolved, which
+correctly licensed an agent to run the whole pass headless and report a clean result. That is the
+outcome this section now exists to prevent. **If you cannot establish any viewer, stop and report
+`VIEWER_UNAVAILABLE` in the FIRST line** — never proceed blind and report a pass.
 
-Prefer (1) until someone tests it, **say which you used**, and if you do test it, record the answer
-rather than leaving it to be rediscovered.
+Why it matters, twice over: a human can rescue an agent that has driven to the wrong screen in
+seconds, where blind it burns the pass and sometimes reports a navigation mistake as a defect; and
+several QA conclusions on this project have been wrong or misattributed, so watching is the cheap
+sanity check that stops a bad claim propagating.
+
+**Order of preference:**
+
+1. **`mcp__android__start_video_stream`** — the safe default. It shares the MCP server's existing
+   `scrcpy-server` connection, so it **cannot** contend for the encoder session, and input stays on
+   the fast MCP driver. Stop it with `stop_video_stream` in teardown.
+2. **A real interactive `scrcpy` window** — better, when it works, because the human can take the
+   mouse and correct you:
+   ```
+   scrcpy -s <serial> --stay-awake --max-size 900 --window-title "QA"
+   ```
+
+⚠️ **Known constraint, still untested:** there is **one scrcpy encoder session per device**, so a
+manual `scrcpy` window and an active scrcpy-mcp session **may** conflict. Do not resolve this by
+falling back to `stop_session` + plain adb — that collides with the hard rule below that raw adb
+cannot be substituted for the MCP driver on keyboard, drag or layout work. So: use (1) unless asked
+otherwise, and **if you do test (2) alongside a live session, record the answer here** rather than
+leaving it to be rediscovered a fourth time.
 
 Tool discipline:
 
@@ -99,9 +116,16 @@ Tool discipline:
 
 ## What to actually exercise
 
-- **Font scale** — `settings put system font_scale <1.0|1.3|2.0>`; restore it afterwards. Sweep default,
-  mid, and maximum. This is where layout defects concentrate, and it matters disproportionately for an
-  older user base.
+- **Font scale is not optional, and default-only testing is how clipping defects reach production one at
+  a time.** `settings put system font_scale <1.0|1.3|2.0>`; restore afterwards. **Always sweep default,
+  mid, and maximum**, and report the scale alongside every layout finding — a frame measured at one scale
+  says nothing about another. Where users skew older, large text is a normal accommodation for a
+  substantial share of them, not an edge case. Note **display size** (`wm density`) is a separate axis
+  from font scale and can compound it.
+- **Both orientations, if supported** — check whether the app is orientation-locked (`orientation` in the
+  Expo config) and say so rather than reporting landscape as untested. Landscape leaves much less
+  vertical room, so **keyboard occlusion and docked footers are materially worse there**; test those
+  specifically rather than assuming portrait findings carry over.
 - **Distinguish clipping from corruption.** Text vertically clipped by a fixed-height container looks
   like broken glyph rendering in a screenshot and is not. The tell: the same string renders fine in a
   *flexible* container at the same size. Call it a layout-constraint defect — "corrupted glyphs" sends
