@@ -35,6 +35,6 @@ Produce a concise briefing with these parts:
 3. **Active / Up next / Blocked** — the near-term lists from STATUS, tightened to what matters.
 4. **Working-tree state** — uncommitted changes or anything that looks mid-flight or drifted
    from what STATUS claims; flag discrepancies between STATUS and reality explicitly.
-5. **Flags** — any open decisions awaiting Brooks, and any doc gaps STATUS calls out.
+5. **Flags** — any open decisions awaiting the developer, and any doc gaps STATUS calls out.
 
-Keep it tight and scannable. End by asking what he wants to work on — then stop and wait.
+Keep it tight and scannable. End by asking what they want to work on — then stop and wait.
