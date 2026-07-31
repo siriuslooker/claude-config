@@ -15,5 +15,18 @@
   "agentPushNotifEnabled": true,
   "skipAutoPermissionPrompt": true,
   "voiceEnabled": false,
-  "enabledPlugins": {}
+  "enabledPlugins": {},
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/delegation-standing-request.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
 }
