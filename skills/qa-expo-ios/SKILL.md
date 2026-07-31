@@ -159,6 +159,79 @@ it, normalize coordinates exactly as the CLI would.
 - Prefer the accessibility tree to answer "is X present / where do I tap"; reserve screenshots for
   pixels. Do **not** run a screenshot-after-every-action loop.
 
+## 🔴 FIRST: which bundle are you testing? Declare the mode and PROVE it
+
+Two QA modes, answering different questions. **Mistaking one for the other invalidates everything you
+report.** Decide before touching the simulator, state it in the first line, and prove it.
+
+| | **Mode A — dev client + Metro** | **Mode B — release artifact** |
+|---|---|---|
+| Under test | the **working tree**, live | a **built artifact** |
+| Use for | iterating on JS/layout/behaviour | milestone & committee sign-off |
+| Turnaround | **~2s** per edit | full rebuild + sync |
+| Install | dev-client Debug build, once | the artifact under test |
+
+**Default to Mode A.** Nearly all QA here is JavaScript, and rebuilding to check it costs minutes per
+round plus a tree sync.
+
+### The transport that makes this cheap: Metro runs on the CLIENT machine
+
+**Metro runs where the source lives — the machine you edit on — and the simulator dials out to it over
+the LAN.** Nothing is forwarded, and **no tree sync is needed for JS changes**: the bundle arrives over
+HTTP rather than from the Mac's copy on disk. One Metro can serve the simulator *and* a tethered Android
+device simultaneously, so a shared-file edit refreshes both.
+
+Because the simulator dials **out**, the Mac's Application Firewall — which does block inbound `node` —
+never enters into it. Verify reachability from the host side rather than assuming:
+
+```
+ssh <host> "curl -s -m 6 -o /dev/null -w '%{http_code}\n' http://<client-ip>:<port>/status"   # expect 200
+```
+
+Launch straight into Metro, skipping the launcher UI:
+
+```
+ssh <host> 'xcrun simctl openurl <UDID> "<scheme>://expo-development-client/?url=http%3A%2F%2F<client-ip>%3A<port>"'
+```
+
+⚠️ **`<scheme>` is the app's declared `scheme` from `app.json`, NOT the bundle id.** Using the bundle id
+fails to resolve.
+
+### Mode A — prove the app is actually attached to Metro
+
+**The silent killer: the app runs a stale baked-in bundle while you believe you are testing your edit.**
+Every finding then describes old code and looks entirely plausible. Prove attachment by at least one of:
+
+- **On-device bundling progress at launch** ("Bundling 33%…") — a baked-in bundle can never show this.
+- **Metro's log records a request for THIS platform** (`iOS Bundled … (N modules)`).
+- The dev launcher listed the dev server and you selected it.
+
+**Mode A traps, each observed:**
+
+- **A dev-client Debug build is cheap** — measured ~3m20s even with cold pods, because React Native ships
+  prebuilt and Expo modules are precompiled. Rebuild only when **native** deps change.
+- **HMR goes stale while the app is backgrounded** — relaunch before reporting a defect, or you may be
+  looking at pre-change code.
+- **Don't infer success from Metro's log.** Fast Refresh pushes updates **without always logging a
+  `Bundled` line**; waiting on log lines times out while the device is already correct. Read the
+  accessibility tree.
+- **`CI=1` disables watch mode** — Metro reports *"reloads are disabled"* and Fast Refresh never fires.
+- A **first-run developer-menu sheet** ("This is the developer menu… **Continue**") appears on first
+  launch. It looks like a broken app; tap Continue once. Check whether **Fast Refresh** is toggled on
+  while you are in there.
+- Stopping Metro's shell can leave the process holding the port, after which a fresh start silently
+  **skips the dev server**. Kill the PID, not the wrapper.
+
+### Mode B — and what Mode A can never tell you
+
+Mode A does **not** substitute for Mode B on anything that exists only in a release build: **Hermes
+release bytecode, minification and shrinking**, plus artifact identity and bundle contents. A defect
+caused by shrinking is invisible in Mode A.
+
+⚠️ **In Mode B the app must NOT be attached to Metro.** If it is, the release bundle is bypassed entirely
+and you are not testing the artifact — while every symptom still looks normal. Confirm no dev-server URL
+was used, and prefer stopping Metro outright.
+
 ## What to actually exercise
 
 - **Dynamic Type is not optional, and default-only testing is how clipping defects reach production one
@@ -214,8 +287,9 @@ leave it as you found it.
 ## Return this payload
 
 ```markdown
-## qa-expo-ios: <OK | FAIL | VIEWER_UNAVAILABLE | INVALIDATED>
+## qa-expo-ios: <OK | FAIL | VIEWER_UNAVAILABLE | STALE_BUILD | STALE_BUNDLE | INVALIDATED>
 
+- **MODE:** <A — dev client + Metro | B — release artifact> • **Proof:** <on-device bundling seen / Metro logged this platform / launcher server selected — or, for Mode B, no dev server used>
 - **Build under test:** <version / build number> • **Artifact mtime:** <mtime>
 - **Install:** <upgrade | fresh> • **Data container preserved:** <yes | NO — say what was lost>
 - **Device:** <simulator model / iOS version / UDID>

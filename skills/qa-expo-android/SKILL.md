@@ -122,6 +122,70 @@ Tool discipline:
   drives on-device interaction.
 - **Log, network and crash forensics** go through `shell_exec` or host adb; there is no dedicated tool.
 
+## 🔴 FIRST: which bundle are you testing? Declare the mode and PROVE it
+
+There are two QA modes, they answer different questions, and **mistaking one for the other invalidates
+everything you report**. Decide before you touch the device, state it in the first line of your report,
+and prove it with evidence — not by assuming.
+
+| | **Mode A — dev client + Metro** | **Mode B — release artifact** |
+|---|---|---|
+| Under test | the **working tree**, live | a **built artifact** |
+| Use for | iterating on JS/layout/behaviour | milestone & committee sign-off |
+| Turnaround | **~2s** per edit | a full rebuild |
+| Install | dev-client build, once | the artifact under test |
+
+**Default to Mode A.** Almost all QA — layout, font scale, keyboard behaviour, navigation, copy — is
+JavaScript, and rebuilding an artifact to check it wastes 20–30 minutes per round. Metro serves the JS
+over the network; a JS edit refreshes in about two seconds.
+
+### Mode A — prove the app is actually attached to Metro
+
+**The failure that ruins a pass silently: the app runs a stale baked-in bundle while you believe you are
+testing your edit.** Everything then reports on old code and looks plausible. Prove attachment by at
+least one of:
+
+- **On-device bundling progress at launch** ("Bundling 33%…") — a baked-in bundle can never show this.
+- **Metro's log records a request for THIS platform** (`Android Bundled … (N modules)`).
+- The dev launcher lists the dev server and you selected it.
+
+Launch straight into Metro rather than tapping through the launcher:
+
+```
+adb -s <serial> reverse tcp:<port> tcp:<port>
+adb -s <serial> shell am start -a android.intent.action.VIEW \
+  -d "<scheme>://expo-development-client/?url=http%3A%2F%2Flocalhost%3A<port>"
+```
+
+⚠️ **`<scheme>` is the app's declared `scheme` from `app.json`, NOT the bundle/application id.** Using the
+application id fails with *"unable to resolve Intent"*.
+
+**Mode A traps, each observed:**
+
+- **HMR goes stale while the app is backgrounded.** An app left idle through a long build showed the old
+  bundle afterwards and needed a relaunch. **If an edit does not appear, relaunch before reporting a
+  defect** — you may be looking at code from before the change.
+- **Don't infer success from Metro's log.** Fast Refresh pushes updates **without always logging a
+  `Bundled` line**, so waiting on log lines times out while the device is already correct. **Verify the
+  accessibility tree**, which is the ground truth you already use for everything else.
+- **`CI=1` disables watch mode entirely** — Metro says *"reloads are disabled"* and Fast Refresh never
+  fires. Never set it for a QA session.
+- A **first-run developer-menu sheet** ("This is the developer menu… **Continue**") appears on first
+  launch of a dev client. It looks exactly like a broken app. Tap Continue once.
+- Debug and release builds are signed differently, so installing a dev client over a release build needs
+  an **uninstall** — which **destroys app data**, including any signed-in session. Know that before you do
+  it, and check whether a standing QA account exists.
+
+### Mode B — and what Mode A can never tell you
+
+Mode A does **not** substitute for Mode B on anything that only exists in a release build: **Hermes
+release bytecode, minification, and R8/proguard shrinking**, plus anything about the artifact itself
+(version identity, bundle contents, signing). A defect caused by shrinking is invisible in Mode A.
+
+⚠️ **In Mode B, the app must NOT be attached to Metro.** If it is, the release bundle is bypassed and you
+are not testing the artifact at all — while every symptom still looks normal. Confirm no dev-server URL
+was used, and prefer stopping Metro outright.
+
 ## What to actually exercise
 
 - **Font scale is not optional, and default-only testing is how clipping defects reach production one at
@@ -155,6 +219,8 @@ Tool discipline:
 | Viewer/MCP session won't start, device unauthorized or offline | `VIEWER_UNAVAILABLE` — **state it in the FIRST line**, not buried at the end |
 | App crashes on launch | `FAIL` with `stage: launch`, plus the logcat excerpt |
 | Install silently no-opped (same or lower versionCode) | `STALE_BUILD` — **you tested the old code; findings are void** |
+| Mode A, but Metro attachment could not be proven | `STALE_BUNDLE` — you may have tested a **baked-in bundle**, i.e. pre-change code. Findings are void until re-run with attachment proven |
+| Mode B, but the app WAS attached to Metro | `INVALIDATED` — the release bundle was bypassed, so nothing about the artifact was tested |
 | A screen was never reached | `NOT_REACHED` — list it; never let unreached mean passed |
 | Keyboard finding gathered under a headless IME | `INVALIDATED` for those findings — say so plainly |
 | Ran clean | `OK` for the assigned scope only |
@@ -178,8 +244,9 @@ be visible from the report alone.
 ## Return this payload
 
 ```markdown
-## qa-expo-android: <OK | FAIL | VIEWER_UNAVAILABLE | STALE_BUILD | INVALIDATED>
+## qa-expo-android: <OK | FAIL | VIEWER_UNAVAILABLE | STALE_BUILD | STALE_BUNDLE | INVALIDATED>
 
+- **MODE:** <A — dev client + Metro | B — release artifact> • **Proof:** <on-device bundling seen / Metro logged this platform / launcher server selected — or, for Mode B, no dev server used>
 - **Build under test:** versionName <x> / versionCode <n> — **confirmed from the artifact, not the manifest**
 - **Install:** <upgrade over vN (migration path exercised) | fresh> • **Data cleared:** <yes|no>
 - **Device:** <model / Android version / serial>
