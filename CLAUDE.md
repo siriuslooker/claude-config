@@ -132,15 +132,24 @@ Follow these in **every** session, for **every** repo, without being reminded.
 
 ### Git
 
-- **Never commit directly to a long-lived branch** (`master`/`main`/`development`). **Any code change —
-  no matter how small — requires a feature branch.** Create the branch *before* making the change; if
-  you only realize after the fact, move the changes to a feature branch and reset the protected branch
-  back to its upstream.
+- **Any CODE change — no matter how small — requires a feature branch.** Create the branch *before*
+  making the change; if you only realize after the fact, move the changes to a feature branch and reset
+  the protected branch back to its upstream.
+  - **DOCUMENTATION-ONLY changes may be committed straight to the default branch.** Granted by the user
+    2026-08-01. A docs commit has no build to break and no review value in a PR of its own, and the
+    branch-plus-PR ceremony was measurably discouraging the doc reconciliation that keeps a fresh
+    session accurate. Pushing is still a separate thing you ask for.
+    - **"Documentation-only" means the diff touches nothing that ships or executes.** Markdown, comments
+      in prose files, `docs/`, `README`. **It is NOT docs-only if the diff also contains** source, tests,
+      config, schema/migrations, CI or build files, dependency manifests or lockfiles, or any script —
+      **including a script that only generates docs**. A mixed diff is a code change: branch it.
+    - When in doubt, branch. The cost of an unnecessary branch is a minute; the cost of an unreviewed
+      change to `main` is someone else's broken checkout.
   - **ONE STANDING EXCEPTION — this repo (`claude-config`, i.e. `~/.claude` itself): commit directly to
-    the default branch.** Granted by the user 2026-07-29. The reason is propagation: a feature branch
-    means other machines don't get an agent/skill/command change until a PR merges, which defeats the
-    point of a shared profile. Pushing still needs approval like anywhere else — the exception is about
-    *branching*, not about pushing unasked. **This applies to no other repo.**
+    the default branch, for code as well as docs.** Granted by the user 2026-07-29. The reason is
+    propagation: a feature branch means other machines don't get an agent/skill/command change until a PR
+    merges, which defeats the point of a shared profile. Pushing still needs approval like anywhere else
+    — the exception is about *branching*, not about pushing unasked. **This applies to no other repo.**
 - **Branch source:** `git fetch` first. If the repo has **`origin/development`**, cut from it; otherwise
   cut from `main`/`master`.
 - **Branch name = `<ticket>-<summary>`.**
