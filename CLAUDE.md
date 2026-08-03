@@ -222,6 +222,42 @@ parser before the script runs. Use a single-quoted here-string when the command 
 
 ## Notifications
 
+### HARD RULE — every stop notifies if Brian is away (automatic; hooks own it)
+
+**`tools/idle-notify.ps1` is wired to three hooks in `settings.json`, so it applies to every session on
+this machine.** Requested 2026-08-03 as a standing rule.
+
+| Hook | Invocation | Effect |
+|---|---|---|
+| `Stop` | `-Event Stop` | arm a timer for this session |
+| `UserPromptSubmit` | `-Event Cancel` | he replied — disarm |
+| `SessionEnd` | `-Event Cancel` | session gone — nothing to wait for |
+
+**It measures the right thing: not "does he look idle" but "did he reply."** On stop it writes a marker
+holding a fresh nonce and launches a *detached* watcher; after `IdleSeconds` (default 300) the watcher
+re-reads the marker and pushes only if it is still there with a matching nonce. A missing marker means he
+replied; a changed nonce means a newer turn owns the notification. That is what keeps a burst of quick
+turns from queueing a burst of pushes — **exactly one notification per genuinely-idle turn.**
+
+This exists because a run that halts silently has failed even when the work is correct: the dead time
+between stopping and being noticed is the cost. Because it is a hook, it covers *every* stop
+mechanically — completion, escalation, a hard stop, a stop you did not plan — which beats remembering.
+
+- **Do not send a manual push merely because you are stopping.** The hook has it. Push explicitly
+  (`/notify`) only when the *content* matters more than the fact of stopping: a specific question, a
+  blocker needing a one-line answer, or console-required work like "restart Claude Code" — and note those
+  arrive *immediately*, whereas the hook waits out the idle window.
+- **The watcher MUST stay detached.** Sleeping inside the hook would block the session for five minutes
+  and the harness would be right to kill it.
+- **Marker dir `~/.claude/.idle-watch/`** — excluded by the allowlist `.gitignore` (which ignores `*`), so
+  **do not add an entry for it.**
+- ⚠️ **Do NOT "improve" this with window-focus detection.** Focus looks like the better signal and it was
+  tried: `Add-Type` declaring `GetForegroundWindow`/`GetLastInputInfo` via P/Invoke matches a keylogger
+  signature, and **the antivirus on this box blocks the script at parse time** — *"This script contains
+  malicious content and has been blocked by your antivirus software."* That kills the whole hook, not just
+  the probe. If you ever need a *right-now* away check without P/Invoke, `quser` gives session STATE and
+  minute-resolution idle time, and a running `LogonUI` process means the workstation is locked.
+
 **Pushover** reaches the phone/desktop regardless of terminal focus: `/notify <message>`, or
 `pwsh -NoProfile -File "$HOME/.claude/tools/notify.ps1" -Message "..."` (flags: `-Title`,
 `-Priority -2..1`, `-Sound`). Credentials: `~/.claude/credentials.json`, entry `"Pushover"`
@@ -252,6 +288,11 @@ terminal is unfocused and needs Remote Control for phone delivery.
   absent. **Fix: put the whole guest-side command inside a quoted `bash -lc '…'`**, so the path is never an
   argv element on the Windows side — or set `MSYS_NO_PATHCONV=1`. This looks exactly like a missing file and
   isn't.
+- **PowerShell array splatting is POSITIONAL, not named.** `& $script @('-Message', $m, '-Title', $t)`
+  binds the literal string `-Message` to the *first positional parameter* and the message text to the
+  second, so `-Title` lands on whatever comes third — and if that parameter is `[int]`, the call dies with
+  a type-conversion error that names the wrong parameter entirely. **Splat a hashtable** (`@{ Message = $m;
+  Title = $t }`) whenever you want named binding. Cost a real debugging detour on 2026-08-03.
 - **Prefer reading an artifact's identity from the artifact, not from the machine you installed it on.**
   Build metadata (a version, a bundled string) can be read out of the built file directly; installing it
   first to interrogate the device mutates state to answer a question the file already answers.
