@@ -24,7 +24,7 @@ would otherwise be classified as separate stacks.
 |---|---|---|---|
 | `**/*.slnx`, `**/*.sln` | — | solution root for `netcore`/`netfx` | — |
 | `**/*.csproj`, `**/*.fsproj`, `**/*.vbproj` | contains `Sdk="Microsoft.NET.Sdk*"` **and** `<TargetFramework>net5.0`+ | `netcore` | `compile-netcore`, `test-netcore`, `deploy-netcore` |
-| `**/*.csproj` | contains `<TargetFrameworkVersion>` (old-style, no `Sdk=` attribute) | `netfx` | *(none installed — see "Unhandled stacks")* |
+| `**/*.csproj` | contains `<TargetFrameworkVersion>` (old-style, no `Sdk=` attribute) | `netfx` | `compile-netfx` *(no `test-netfx`/`deploy-netfx` yet — see "Unhandled stacks")* |
 | `**/package.json` | not under `node_modules/`; has a `scripts` block | `node` | `compile-node`, `test-node`, `deploy-node` |
 | `**/app.json`, `**/app.config.{js,ts}` | has an `expo` key (or exports an Expo config) **and** `expo` in that package's dependencies | `expo-ios` | `compile-expo-ios`, `qa-expo-ios` |
 | ↑ same manifest | as above | `expo-android` | `compile-expo-android`, `qa-expo-android` |
@@ -50,10 +50,17 @@ For each detected stack record:
 
 ## Unhandled stacks
 
-If you detect a stack with no installed skill (e.g. `netfx`, which needs MSBuild via `vswhere`,
-not `dotnet build`), report it under `unhandled` with the reason. **Do not substitute a
-different stack's skill** — running `dotnet build` on a `<TargetFrameworkVersion>` project
-fails in confusing ways. Adding a stack means adding a skill; say so.
+If you detect a stack with no installed skill, report it under `unhandled` with the reason. **Do not
+substitute a different stack's skill** — running `dotnet build` on a `<TargetFrameworkVersion>` project
+fails in confusing ways. Adding a stack means adding a skill; say so, and see
+`authoring-stack-ops-skills`.
+
+⚠️ **Partial coverage still counts as unhandled for the missing verbs.** `netfx` now has
+**`compile-netfx`** (added 2026-08-03) but **no `test-netfx` and no `deploy-netfx`**. So a `netfx` repo
+compiles cleanly through the agents and a request to *test* it must be reported as unhandled rather than
+attempted with `test-netcore` — `dotnet test` does not run a `net4x` xunit project; that needs
+`vstest.console.exe`, also locatable via `vswhere`. List the stack under its own heading with the skills
+that exist, and name the missing verbs explicitly so the caller is not left assuming full coverage.
 
 ## Return this manifest
 
