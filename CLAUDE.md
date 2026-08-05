@@ -75,10 +75,15 @@ look like source errors. New skills go in `~/.claude/skills/` beside the existin
 
 ## Session workflow
 
-Every project should carry the four session commands and the `docs/` scaffold they maintain:
+Every project should carry the session commands and the `docs/` scaffold they maintain:
 
 - **`/init-project`** — once, on a fresh project: interviews you and writes `CLAUDE.md` plus the `docs/`
   baseline.
+- **`/adopt-project`** — once, on an **existing** project that predates the scaffold: mines the repo's
+  own `CLAUDE.md`, ad-hoc handoff docs and commit trail, interviews only the gaps, then writes the five
+  docs and patches `CLAUDE.md`. Also relocates the current-state narrative that has usually accreted in
+  `CLAUDE.md` into STATUS and the decision log, so the two can't drift. Use this, **not**
+  `/init-project`, when there's already code and history.
 - **`/start-session`** — first thing in a fresh context: reads the docs and git state, then briefs you.
 - **`/save-context`** — mid-session checkpoint. Freshens status only. Safe to run repeatedly.
 - **`/end-session`** — real close-out: reconciles status, **appends to the decision log**, records
