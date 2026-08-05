@@ -114,5 +114,12 @@ usable account; a drift warning; and the log paths for anything that failed to c
 - **Do not create a `.env.local` to point a Vite app at a local API.** Vite reads it in production
   mode too, so a stale override can be constant-folded into a deployed bundle. Set the variable
   per-invocation instead. (The manifest's `notes` may repeat this where it has already bitten.)
+- **A branch switch moves a running watch server's port.** Ports live in tracked config, so
+  `git checkout` to a branch where they differ makes `tsx watch` / Vite hot-reload and **rebind to the
+  other branch's port** — silently, while the user has a tab open on the old one. Observed 2026-08-05:
+  checking out `main` from a port-pinning branch dropped a backend from 7310 to 8080 and a Vite app
+  from 7312 to 5173. If you switch branches while surfaces are up, re-run `status` afterwards and say
+  so; the fix is usually to switch back or `restart`. Data in a local database survives, so only the
+  URL changed — but a user reporting "it just stopped working" right after you touched git is this.
 - Keep the manifest and its human-readable twin (`humanDoc`) in agreement. Changing a port is a code
   change: branch it.
