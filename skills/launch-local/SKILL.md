@@ -1,6 +1,6 @@
 ---
 name: launch-local
-description: Start an app locally as a detached process that survives the agent's shell, health-check it, and return the URL plus a PID file for later cleanup. Covers .NET (dotnet run) and Node (dev server / preview). Use before QA or any manual verification against a running app.
+description: Start an app locally as a detached process that survives the agent's shell, health-check it, and return the URL plus a PID file for later cleanup. Reads a project's `local-env.json` port manifest when one exists, so ports and start commands are never guessed. Covers .NET (dotnet run) and Node (dev server / preview). Use before QA or any manual verification against a running app.
 ---
 
 # Launch locally (detached)
@@ -14,6 +14,19 @@ does not exist.
 
 ## Pick the command
 
+**First look for a port manifest** — `local-env.json` at the repo root, or `.claude/local-env.json`.
+When one exists it is authoritative for ports, commands, cwd, health URLs and start order, and you
+should not re-derive any of them. Per surface it gives `port`, `command`, `cwd`, `health`,
+`dependsOn`, and may add `healthExpect`, `fixed`, `startByDefault`, `authNote`, `declaredIn` and
+`notes`. Honour `dependsOn` as the launch order and health-check each dependency before starting what
+depends on it. `onPortBusy: "fail"` means report the collision rather than working around it. The
+`/local-env` command drives this file; a manifest plus this skill is the whole contract.
+
+The manifest is a *description* of the real configs, not their source — `declaredIn` names the file
+the app actually reads. If they disagree, the config wins at runtime; report the drift.
+
+Without a manifest, fall back to detection:
+
 | Stack | Command | Default URL |
 |---|---|---|
 | netcore | `dotnet run --project <proj> --launch-profile http` | read `Properties/launchSettings.json` |
@@ -23,6 +36,12 @@ does not exist.
 Read the actual port from `launchSettings.json` / `vite.config.*` rather than assuming. If the port
 is already in use, report `PORT_IN_USE` with what holds it — do not silently pick another port; the
 caller may be looking at a stale process from an earlier run.
+
+**A package manager missing from your shell's PATH is not evidence it is uninstalled.** Agent shells
+here routinely carry a reduced PATH. Before reporting `pnpm`/`npm`/`yarn` absent, check
+`Get-Command`, then the usual install locations (`%APPDATA%\npm\<pm>.cmd`, the Node install dir,
+`%LOCALAPPDATA%\pnpm`), and invoke it by full path if found. A manifest may carry a
+`packageManagerNote` saying exactly this.
 
 **Full-stack repos** (a .NET API serving an SPA): in dev, both processes run and the SPA's dev server
 proxies API routes — launch the API **first**, then the SPA, and return the **SPA's** URL as the one
@@ -34,6 +53,15 @@ Before launching, check for local-only config the app needs and cannot get from 
 connection strings, secrets, API keys. Prefer environment variables or user-secrets over editing a
 tracked `appsettings.*.json` / `.env`. If a required value is missing, report `CONFIG_MISSING` with
 the key name rather than launching an app that will crash on first request.
+
+**Never create a `.env.local` to point a Vite app at a local API.** Vite reads `.env.local` in
+production mode as well as dev, so the override gets constant-folded into a production bundle and the
+deployed app tries to reach the *developer's own machine*. Pass the variable per-invocation instead.
+
+**A local data store is not the deployed one.** An app backed by a local database has its own file,
+so accounts, settings and content from a shared test rig do not exist locally. When known-good
+credentials fail against localhost, that is the first thing to check — surface the manifest's
+`authNote` (which should say how to mint a local account) rather than debugging auth.
 
 ## Launch
 
