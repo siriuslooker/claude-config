@@ -1,6 +1,6 @@
 ---
 description: Start, stop or inspect this project's localhost development surfaces from its own port manifest, so QA never guesses a port or a start command.
-argument-hint: up [surface...] | down [surface...] | status | restart [surface...]
+argument-hint: up [surface...] | down [surface...] | status | restart [surface...] | sweep
 allowed-tools: Read, Glob, Grep, PowerShell, Bash, Skill
 ---
 
@@ -21,11 +21,30 @@ agent if you like, but own the launching.
 |---|---|
 | `up` (default when no verb given) | Start the manifest's `defaultUp` surfaces, in dependency order. Named surfaces override that list. |
 | `down` | Stop what was started, by PID file, falling back to port owner. |
-| `status` | Report what is listening, what is not, and whether the manifest has drifted from the real configs. Starts nothing. |
+| `status` | Report what is listening, what is not, whether the manifest has drifted from the real configs, and whether any **leaked** dev processes are lying around. Starts nothing. |
 | `restart` | `down` then `up` for the named surfaces (all of `defaultUp` if none named). |
+| `sweep` | Report leaked dev processes from earlier sessions, and kill them **only after showing the list and getting a yes**. |
 
 Examples: `/local-env up`, `/local-env up admin`, `/local-env status`, `/local-env down`,
-`/local-env restart backend`.
+`/local-env restart backend`, `/local-env sweep`.
+
+## Never start a surface whose port is already listening
+
+**Check the port BEFORE launching, for every surface, and refuse if something holds it.** This is not
+the same as the `onPortBusy` rule below, which is about what to do when a launch *fails* to bind —
+this is about not attempting the launch at all.
+
+The reason is a measured leak, not tidiness. On 2026-08-07 a machine was found running **eight**
+duplicate backend watchers, one per time the dev server had been started the previous day. The
+server itself behaved correctly — it caught `EADDRINUSE` and exited 1 naming the port — but the
+`tsx watch` wrapper **outlived its child's failure** and sat there holding recursive filesystem
+watches over the repo. Alongside six stale `vite` servers from another project, that machine was
+running fourteen file watchers over the same trees, all waking on every change, which cost more in
+felt slowness than anything else being investigated at the time.
+
+So: if the port is listening, say what holds it and **stop**. If the holder is an earlier run of the
+same surface, say so and offer `restart`. A refused launch leaves nothing behind; a failed one leaks
+a watcher.
 
 ## Find the manifest
 
@@ -78,7 +97,46 @@ the value in its `declaredIn` config file. A mismatch is worth flagging loudly �
 *description* of the configs, not their source, so when they disagree the configs win at runtime and
 every agent reading the manifest is wrong.
 
-Do not start anything during `status`.
+**Also report leaks**, by running the machine-level detector:
+
+```
+pwsh -NoProfile -File "$HOME/.claude/tools/find-leaked-dev-procs.ps1"
+```
+
+Report only its summary line unless there are candidates — then show the grouped list. **A leaked
+watcher holds no socket, so `status` keyed purely on ports reports a perfectly healthy environment
+while dozens of them accumulate.** That is exactly how a machine reached 68 node processes unnoticed
+on 2026-08-07, 54 of them leaked, while `status` said everything was fine.
+
+Do not start anything during `status`, and do not kill anything during it either — `status` reports.
+
+## `sweep`
+
+Run the same detector, show the grouped candidate list, and **ask before killing**. On a yes, re-run
+it with `-Kill`.
+
+```
+pwsh -NoProfile -File "$HOME/.claude/tools/find-leaked-dev-procs.ps1"          # report
+pwsh -NoProfile -File "$HOME/.claude/tools/find-leaked-dev-procs.ps1" -Kill    # after approval
+```
+
+Three things about it worth knowing rather than rediscovering:
+
+- **It keeps the family of anything listening — ancestors as well as descendants.** A live server's
+  parent watcher can itself be days old and look identical to the leaked ones beside it; on
+  2026-08-07 a cluster-based kill would have taken down the live backend through its 21-hour-old
+  parent. The script walks outward from the listening socket, which is the only ground truth here.
+- **It kills only recognised dev-tool command lines**, never "old and no socket". That heuristic
+  matches the agent harness's own node processes and would kill the session running the sweep.
+- **MCP servers need `-IncludeMcpServers`.** A live session's MCP servers are indistinguishable from
+  leaked ones by every available signal — stdio, so no socket; a `cmd.exe` parent that stays alive
+  either way; and no age threshold separates them from a long working session. They are also the
+  cheap leak, since they do no file watching. Sweep them deliberately, ideally with no session
+  running.
+
+It verifies after killing that every previously-listening port is still listening, and exits
+non-zero if one went down. **If that ever fires, the keep set has a bug — restart the surface and say
+so.** Do not treat it as expected noise.
 
 ## `down`
 
