@@ -244,6 +244,26 @@ re-reads the marker and pushes only if it is still there with a matching nonce. 
 replied; a changed nonce means a newer turn owns the notification. That is what keeps a burst of quick
 turns from queueing a burst of pushes — **exactly one notification per genuinely-idle turn.**
 
+**A turn that ends with a background task still running waits 30 minutes, not 5** (`BusySeconds`, added
+2026-08-06). Ending a turn while a subagent or background shell runs is not a turn you owe a reply to —
+the session re-invokes itself when the task returns — so the 5-minute push was pure noise, and during a
+long agent run it fired every time. The Stop payload states this outright, in a **supported** field:
+
+```
+"background_tasks": [ { id, type: "subagent", status: "running", description, agent_type } ]
+```
+
+⚠️ **Do not reimplement this by scanning the temp directory.** Measured 2026-08-06: a running agent's own
+`<id>.output` stays **0 bytes with a stale mtime for the whole run** — it is written on completion — so
+the obvious "is its log growing?" check reports a perfectly healthy agent as dead. Same class of trap as
+keying liveness off a process name; the payload field is the only honest source.
+
+**It is a longer wait, not suppression, and that is deliberate:** a task that *hangs* is exactly what you
+want to hear about, and "never notify while busy" would hide precisely that. No liveness re-check is
+needed — a task that finishes normally re-invokes the session, whose next Stop mints a new nonce and
+retires the old watcher through the mismatch test that already existed. So the busy timer only ever fires
+when nothing came back, and it says so: *"Still running … may be stuck"*, at priority 1.
+
 This exists because a run that halts silently has failed even when the work is correct: the dead time
 between stopping and being noticed is the cost. Because it is a hook, it covers *every* stop
 mechanically — completion, escalation, a hard stop, a stop you did not plan — which beats remembering.
