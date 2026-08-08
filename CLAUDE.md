@@ -225,6 +225,42 @@ It takes the command as **one string** (`-Run`), not trailing arguments — Powe
 any `-flag` in the wrapped command to the script's own parameters, and a bare `--` is consumed by the
 parser before the script runs. Use a single-quoted here-string when the command contains quotes.
 
+### Make a background task VISIBLE — `tools/bg-task.sh`
+
+A session waiting on a five-minute build looks completely idle. Subagents appear in the status bar;
+background bash tasks did not, so wrap long `run_in_background` commands and they will:
+
+```
+bash ~/.claude/tools/bg-task.sh "Android build" "bash scripts/build.sh"
+```
+
+Label first, command as **one string** — same shape as `run-notify.ps1`, and equally transparent:
+stdout/stderr pass through unmodified, the wrapper prints nothing of its own, and it exits with the
+wrapped command's code. The two compose; `run-notify.ps1` tells you when it *finished*, this tells you
+it is *still going*. The bar shows `⚙ Android build 4m` for one task, `⚙ 3 tasks 12m` for several
+(elapsed = the longest-running), and **nothing at all** when none is running.
+
+⚠️ **Liveness is the PID, and the two cheaper designs are both measured dead ends.** The `statusLine`
+stdin payload carries nothing about background tasks or subagents — checked against the documented
+schema. And the task output directory is not a liveness signal: a **running** Metro process had a
+`.output` whose mtime was **three hours stale**, while completed *agent* outputs are **0 bytes**, so
+"is the file growing?" reports a live task as dead and a dead one as live. Same class of error as
+keying liveness off a process name. So the wrapper registers its own PID in a marker and the status
+line asks the OS with `kill -0`.
+
+A marker is deleted by an `EXIT`/`INT`/`TERM` trap. A **SIGKILLed** wrapper orphans its marker, and
+that is fine and expected: the status line drops any marker whose PID is dead and deletes it on the
+next render. **Do not add a cleanup daemon** — the PID check already is the cleanup.
+
+**`refreshInterval` in `settings.json`'s `statusLine` object is what makes the timer tick** (2s).
+Without it the bar only re-renders on conversation state changes, so the elapsed time freezes at
+whatever it was when the turn ended — exactly the case this exists for. ⚠️ **Unrelated to
+`REFRESH_INTERVAL` *inside* `hooks/statusline.sh`**, which throttles the Anthropic usage API call and
+defaults to 300s. Both must keep working; do not conflate them.
+
+- **Marker dir `~/.claude/.bg-tasks/`** — excluded by the allowlist `.gitignore` (which ignores `*`), so
+  **do not add an entry for it.**
+
 ## Notifications
 
 ### HARD RULE — every stop notifies if Brian is away (automatic; hooks own it)

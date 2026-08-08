@@ -312,6 +312,69 @@ if [ "$SHOW_WEEKLY" = "1" ]; then
     fi
 fi
 
+# ── Background tasks (markers written by ~/.claude/tools/bg-task.sh) ─────────
+# Liveness is the PID, not the file: a marker's mtime says nothing (a running
+# Metro task was measured with a 3-hour-stale .output, and finished agent
+# outputs are 0 bytes). A marker whose PID is dead is deleted here — that IS the
+# cleanup for a hard-killed wrapper whose EXIT trap never ran. No daemon.
+BG_DISPLAY=""
+BG_DIR="${BG_DIR:-$HOME/.claude/.bg-tasks}"
+
+# format_remaining goes empty below 1s and says "<1m" under a minute, which is
+# useless for a timer you watch tick. Seconds under a minute, its output above —
+# and format_remaining itself is left alone, other segments depend on it.
+bg_elapsed() {
+    local secs="$1"
+    [ "$secs" -lt 0 ] 2>/dev/null && secs=0
+    if [ "$secs" -lt 60 ] 2>/dev/null; then echo "${secs}s"; else format_remaining "$secs"; fi
+}
+
+if [ -d "$BG_DIR" ]; then
+    BG_FILES=( "$BG_DIR"/*.json )
+    if [ -e "${BG_FILES[0]}" ]; then   # unmatched glob stays literal; -e filters it
+        BG_COUNT=0 BG_OLDEST=0 BG_LABEL=""
+        # ONE jq pass over every marker — this renders on a short timer, so a jq
+        # process per file would be the expensive part of the whole script.
+        # input_filename gives us the path back so a dead one can be removed.
+        # [31]|implode is US (0x1f) — the same separator the stdin parse uses,
+        # written this way because a label may contain any printable character.
+        BG_QUERY='[input_filename, (.pid // "" | tostring),
+                   (.started // "" | tostring), (.label // "")
+                  ] | join([31]|implode)'
+        BG_ROWS=$(jq -r "$BG_QUERY" "${BG_FILES[@]}" 2>/dev/null)
+        # jq aborts the WHOLE batch on one unparseable file, which would hide a
+        # genuinely running task (a marker truncated by a crash mid-write does
+        # that). Only then pay for a process per file, so the happy path stays
+        # at one jq. Command substitution — not a pipe — so $? is jq's.
+        if [ $? -ne 0 ]; then
+            BG_ROWS=""
+            for BG_F in "${BG_FILES[@]}"; do
+                BG_ROWS+="$(jq -r "$BG_QUERY" "$BG_F" 2>/dev/null)"$'\n'
+            done
+        fi
+        while IFS=$'\x1f' read -r BG_F BG_PID BG_START BG_TITLE; do
+            [ -z "$BG_F" ] && continue
+            if [ -n "$BG_PID" ] && kill -0 "$BG_PID" 2>/dev/null; then
+                BG_COUNT=$(( BG_COUNT + 1 ))
+                BG_AGE=$(( NOW - $(num "$BG_START") ))
+                if [ "$BG_AGE" -ge "$BG_OLDEST" ] 2>/dev/null; then
+                    BG_OLDEST="$BG_AGE"; BG_LABEL="$BG_TITLE"
+                fi
+            else
+                rm -f "$BG_F" 2>/dev/null
+            fi
+        done <<< "$BG_ROWS"
+
+        if [ "$BG_COUNT" = 1 ]; then
+            [ -z "$BG_LABEL" ] && BG_LABEL="task"
+            [ "${#BG_LABEL}" -gt 20 ] && BG_LABEL="${BG_LABEL:0:19}…"
+            BG_DISPLAY="⚙ ${BG_LABEL} $(bg_elapsed "$BG_OLDEST")"
+        elif [ "$BG_COUNT" -gt 1 ] 2>/dev/null; then
+            BG_DISPLAY="⚙ ${BG_COUNT} tasks $(bg_elapsed "$BG_OLDEST")"
+        fi
+    fi
+fi
+
 # ── Stale indicator — ⚠ in place of color dot. Only when session came from the
 # cache: stdin rate_limits are always fresh, so cache age is irrelevant there.
 IS_STALE=0
@@ -328,6 +391,8 @@ fi
 # ── Assemble ──────────────────────────────────────────────────────────────────
 PARTS=()
 [ -n "$BRANCH" ] && PARTS+=("🌿 $BRANCH$DIRTY")
+# Early on purpose: "a build is running" must stay visible when the line is long.
+[ -n "$BG_DISPLAY" ]          && PARTS+=("$BG_DISPLAY")
 if [ -n "$MODEL" ] && [ -n "$EFFORT_LABEL" ]; then
     PARTS+=("$MODEL/$EFFORT_LABEL")
 elif [ -n "$MODEL" ]; then
