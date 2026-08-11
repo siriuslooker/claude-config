@@ -1,6 +1,17 @@
 {
   "model": "opus",
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/pwsh-exec.sh\" \"$HOME/.claude/tools/reap-stale-dev-servers.ps1\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
     "UserPromptSubmit": [
       {
         "hooks": [

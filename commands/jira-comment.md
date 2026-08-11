@@ -40,8 +40,8 @@ Getting this wrong posts someone else's work to the wrong ticket.
 
 Summarize **what actually happened**, from two sources:
 
-- **This session's work** — what was built, decided, verified, and deliberately left undone. This is
-  the important half: verification results, known gaps, and "why" are things no commit message holds.
+- **This session's work** — what was built, fixed and confirmed working. Gather what was left undone
+  too, so you know the shape of things, but see §3: it does **not** go in the comment.
 - **The commits** — cross-check against `git log --oneline <range>` and `git diff --stat <range>`.
   Default range is the current branch's commits not yet on the main branch
   (`git log --oneline main..HEAD`, or `origin/main..HEAD` if that is more accurate); with
@@ -53,31 +53,81 @@ inventing detail.
 
 ## 3. Draft the comment
 
-Format: **one bolded lead line, then bullets.** Aim for **8–12 bullets, ~1500–2000 characters.**
+Format: **one bolded lead line, then bullets.**
+
+### ⛔ Length is a HARD CAP, not a target
+
+**Maximum 10 bullets. Maximum 1500 characters. Maximum ~25 words per bullet.**
+
+These are ceilings you stay under, not lengths you fill. **Six tight bullets beat ten padded ones.**
 Prose paragraphs, fenced code blocks, and tables are what this command exists to avoid.
+
+⚠️ **Count both before printing the draft, and state the counts to the user.** If either is over,
+*cut before printing* — do not print a long draft and offer to shorten it. Offering to trim is not a
+substitute for trimming; the user should never have to ask twice.
+
+**When the work spans several increments, that is a reason to compress, not to exceed the cap.** One
+bullet per increment, not one per detail within it. A session covering three pieces of work gets the
+same 10 bullets as a session covering one. If it genuinely will not fit, post the *most recent* work
+and say so in one line — do not silently widen the scope to justify the length.
+
+**Cut these first — they are where the bloat always comes from:**
+
+- Measurements, byte counts and timings, unless the number *is* the finding.
+- A separate "cause confirmed" bullet — fold the how-confirmed into the bug bullet as a clause.
+- Anything already obvious from a linked PR diff.
+- Background, rationale and design reasoning. The decision log holds that; the ticket does not.
+
+A reader should get the whole picture in about thirty seconds. If yours takes longer, it is too long.
+
+### ⛔ Never include these three
+
+Not "keep them brief" — **leave them out entirely.** All three are things the ticket's audience does
+not read a comment for, and each one reliably drags a draft over the cap.
+
+1. **No git commit IDs.** No SHAs, no `abc1234`, no commit ranges, no "three commits on branch X".
+   A *PR number* is fine and often useful — a commit hash means nothing to a reader who is not in the
+   working copy, and the PR already links the diff.
+2. **No unit test results.** No pass counts, no "236 .NET / 69 SPA", no "build and lint clean". Green
+   tests are the baseline for calling work done, not a finding. Verification that a *human* could not
+   have assumed is still worth a clause — "confirmed in the backoffice embed as an event-limited
+   admin" — but a number from a test runner never is.
+3. **No "open", "gaps", "next" or "in flight".** **Constrain the comment strictly to what was
+   completed.** Work that has not landed does not go on the ticket in any form, including a single
+   trailing line. Deliberate omissions, known gaps and follow-on work belong in the project's own
+   status doc and deferred-items list, where they are tracked and revisited; a ticket comment is a
+   record of what shipped, and a reader six months later needs to know what is true, not what was
+   pending on a Tuesday.
+
+⚠️ These override anything above that appears to invite such content. If applying them leaves you
+with very little to say, that is the correct outcome — post the short version rather than padding it
+back out with status.
 
 Use Jira **wiki markup** (`/rest/api/2` accepts it — see §6):
 
 - `*bold*`, `_italic_`, `{{monospace}}`, `* ` for bullets, `h4.` for a heading if you truly need one.
 
-Cover, in roughly this order, skipping any that don't apply:
+Cover, in roughly this order, **skipping freely** — this is a menu to select from, not a checklist to
+complete. Most comments should not have all five:
 
-- **What changed** and where it landed (PR number, merge commit).
-- **Bug / cause / fix** as separate bullets when this was a defect. State the root cause as
-  *confirmed*, and say how it was confirmed — not as a guess.
+- **What changed** and where it landed (PR number, if there is one).
+- **Bug / cause / fix** when this was a defect — the root cause as *confirmed*, with how it was
+  confirmed as a clause, not as its own bullet.
 - **Any durable lesson** worth a future reader's attention.
 - **Other changes** carried along (docs, tooling, config).
-- **Verified** — one bullet, comma-separated results. Not a table.
-- **Gaps left open** — what was deliberately not fixed, and why. Do not quietly omit these.
-- **Next** — the immediate follow-on work.
+- **Confirmed working** — only where a human could not have assumed it, and never test-runner output.
 
-Be specific: file paths, error text, commit SHAs, status codes. Vague summaries are worthless on a
-ticket read six months later.
+Be specific: file paths, error text, status codes. Vague summaries are worthless on a ticket read six
+months later — but specificity means naming the *thing*, not appending a measurement to it.
 
 ## 4. Print it and STOP
 
 Print the full draft to the user, then **stop and wait for explicit approval.** Do not post in the
 same turn as the draft. If they ask for changes, revise and print again — still without posting.
+
+State the bullet count and character count with the draft, so the cap in §3 is visibly met. If you
+find yourself writing "longer than the target, I can tighten it if you prefer" — stop and tighten it
+first. That sentence means the draft should not have been printed.
 
 *(Note: `allowed-tools` above pre-authorizes `curl`, so this gate is instruction-only. If you want it
 enforced structurally, remove `Bash(curl:*)` from the frontmatter — the POST will then always raise a
