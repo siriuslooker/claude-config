@@ -1,10 +1,15 @@
 # User-level instructions (every project, this profile)
 
 This file, and the `commands/`, `agents/`, `skills/`, `hooks/` and `tools/` directories beside it, are
-version-controlled at **`github.com/siriuslooker/claude-config`** (private) — a clone plus a
-`credentials.json` is a complete setup, with no plugins or marketplaces to install. See `README.md`
-there. Secrets in `~/.claude` are excluded by an allowlist `.gitignore` — never re-admit
+version-controlled at **`github.com/siriuslooker/claude-config`** — a clone plus a `credentials.json`
+and a `CLAUDE.machine.md` is a complete setup, with no plugins or marketplaces to install. See
+`README.md` there. Secrets in `~/.claude` are excluded by an allowlist `.gitignore` — never re-admit
 `credentials.json`, `.credentials.json`, `history.jsonl` or `projects/`.
+
+⚠️ **That repo is PUBLIC.** Nothing written into this file, or any tracked file beside it, may name a
+host, an address, a device serial, a drive layout, an internal service or an employer's tenant. Where a
+command needs one, it reads it from `credentials.json` at runtime — that file is gitignored and is the
+right home for every such value. Per-machine facts go in `CLAUDE.machine.md`, which is gitignored too.
 
 **Keep this file machine-agnostic.** It is shared across every machine this profile is cloned to, so
 anything true of only one host belongs in `CLAUDE.machine.md`, and anything requiring particular network
@@ -105,15 +110,16 @@ Determine the provider from the **git remote**, unless the project's own `CLAUDE
 
 | Remote | Provider | Ticket form |
 |---|---|---|
-| `bitbucket.org/<work-org>/...` | **Jira** (`<jira-site>`) | `EN-957` |
+| `bitbucket.org/...` (the work remote) | **Jira** (site host = the Jira entry's `hosts[0]` in `~/.claude/credentials.json`) | `EN-957` |
 | `github.com/siriuslooker/...` | **GitHub Issues** | `GH-42` |
 
 If the remote is neither, or there's no ticket, **ask** before branching.
 
-### Jira (RD work)
+### Jira (work)
 
 The Atlassian MCP servers are often unauthenticated and have **no attachment endpoint**, so these use
-the REST API with the token in `~/.claude/credentials.json` (entry `"Jira API (<work-org>)"`):
+the REST API with the token in `~/.claude/credentials.json` (the entry whose label starts with
+`"Jira API"`):
 
 - **`/jira-comment`** — draft a concise bulleted summary of recent work, print it, post only on approval.
 - **`/jira-attach <ISSUE-KEY> <file>...`** — upload files.
@@ -167,7 +173,7 @@ Follow these in **every** session, for **every** repo, without being reminded.
 - **Pull requests:** open from the feature branch into its base (`development` if it exists, else
   `main`) when the effort is complete or when asked.
 - **Bitbucket has no `gh`.** Use the **`bb` CLI** (`bb pullrequest create|merge`, `--repository
-  <work-org>/<repo>`). `--dry-run` is a cheap way to confirm auth. Bitbucket PRs have an **author and
+  <org>/<repo>`). `--dry-run` is a cheap way to confirm auth. Bitbucket PRs have an **author and
   reviewers, no assignee** — the API refuses to add the author as their own reviewer, so "assign it to
   me" is satisfied by the CLI being authenticated as you. Don't probe for credentials; test auth with an
   ordinary read.
@@ -363,9 +369,9 @@ terminal is unfocused and needs Remote Control for phone delivery.
 Some tooling needs network access a given machine may not have. State the precondition rather than
 retrying blindly, and say plainly when it's unavailable:
 
-- **`/push-nuget`** → the private `<nuget-feed>` feed. **Requires the RD VPN.**
-- **Jira commands, and `bb`** → RD Bitbucket/Atlassian. Unavailable on a personal machine; on those,
-  GitHub Issues via `gh` is the path.
+- **`/push-nuget`** → the private work NuGet feed. **Requires the work VPN.**
+- **Jira commands, and `bb`** → the work Bitbucket/Atlassian tenant. Unavailable on a personal machine;
+  on those, GitHub Issues via `gh` is the path.
 
 ---
 

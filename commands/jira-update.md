@@ -51,9 +51,12 @@ standing rule. If one exists, say so and get per-ticket authorization before doi
 Never write blind. Fetch first:
 
 ```
-tok=$(jq -r '.credentials[]|select(.label=="Jira API (<work-org>)").password' ~/.claude/credentials.json)
-curl -s -u "<work-email>:$tok" \
-  "https://<jira-site>/rest/api/2/issue/<KEY>?fields=summary,status,description" \
+jira=$(jq -r '[.credentials[]|select(.label|startswith("Jira API"))][0]' ~/.claude/credentials.json)
+site=$(jq -r '.hosts[0]' <<<"$jira")
+user=$(jq -r '.username' <<<"$jira")
+tok=$(jq -r '.password' <<<"$jira")
+curl -s -u "$user:$tok" \
+  "https://$site/rest/api/2/issue/<KEY>?fields=summary,status,description" \
   > current.json
 jq -r '.fields.description // ""' current.json > current-desc.txt
 jq -r '{key,summary:.fields.summary,status:.fields.status.name,chars:(.fields.description//""|length)}' current.json
@@ -106,12 +109,15 @@ Build the JSON with `jq -Rs`, never by hand-quoting:
 ```
 jq -Rs '{fields:{description:.}}' new-desc.txt > payload.json
 
-tok=$(jq -r '.credentials[]|select(.label=="Jira API (<work-org>)").password' ~/.claude/credentials.json)
+jira=$(jq -r '[.credentials[]|select(.label|startswith("Jira API"))][0]' ~/.claude/credentials.json)
+site=$(jq -r '.hosts[0]' <<<"$jira")
+user=$(jq -r '.username' <<<"$jira")
+tok=$(jq -r '.password' <<<"$jira")
 curl -s -w "HTTP_STATUS:%{http_code}\n" -X PUT \
   -H "Content-Type: application/json" \
-  -u "<work-email>:$tok" \
+  -u "$user:$tok" \
   --data-binary "@payload.json" \
-  "https://<jira-site>/rest/api/2/issue/<KEY>"
+  "https://$site/rest/api/2/issue/<KEY>"
 ```
 
 **Expect `204 No Content`** — an empty body is success here, not a failure. Read the token inside the
@@ -133,8 +139,8 @@ Other field shapes:
 description update once discarded everything after a `----` rule.
 
 ```
-curl -s -u "<work-email>:$tok" \
-  "https://<jira-site>/rest/api/2/issue/<KEY>?fields=description" \
+curl -s -u "$user:$tok" \
+  "https://$site/rest/api/2/issue/<KEY>?fields=description" \
   | jq -r '.fields.description' > stored-desc.txt
 diff new-desc.txt stored-desc.txt && echo "IDENTICAL" || echo "DIFFERS — inspect above"
 ```
@@ -153,8 +159,8 @@ leave a truncated description on the ticket.
 ## 8. Failure modes
 
 - **401** — token likely rotated. Tell the user to regenerate at
-  `id.atlassian.com/manage-profile/security/api-tokens` and update the `"Jira API (<work-org>)"`
-  entry's `password` in `~/.claude/credentials.json`. Do not retry blindly.
+  `id.atlassian.com/manage-profile/security/api-tokens` and update the Jira entry's (label prefix
+  `"Jira API"`) `password` in `~/.claude/credentials.json`. Do not retry blindly.
 - **404** — wrong key, or not visible to this account. Re-check §1; do not guess another key.
 - **400** — malformed body, or a field that is not on the issue's edit screen. Confirm `jq -Rs` built
   the payload, then check the field is editable:
@@ -170,11 +176,11 @@ leave a truncated description on the ticket.
 - **Alternative path:** when the Atlassian MCP is authenticated (`/mcp` → claude.ai Atlassian), prefer
   `mcp__claude_ai_Atlassian__editJiraIssue` — MCP calls are not subject to the Bash classifier, and it
   takes `contentFormat: "markdown"`. That authentication does not persist across sessions, which is
-  why this REST fallback stays useful. Its `cloudId` accepts the bare host
-  `<jira-site>`; it returns the saved issue, but §7 still applies.
-- Auth host is the site URL `<jira-site>`, **not** `api.atlassian.com/ex/jira/<cloudId>`.
+  why this REST fallback stays useful. Its `cloudId` accepts the bare host (the Jira entry's
+  `hosts[0]`); it returns the saved issue, but §7 still applies.
+- Auth host is the site URL (the Jira entry's `hosts[0]`), **not** `api.atlassian.com/ex/jira/<cloudId>`.
   Basic auth = `email:api-token`.
-- The token in `credentials.json` is Jira-scoped; the `"Bitbucket API (<work-org>)"` entry in the
-  same file returns 401 against Jira — don't use it here.
+- The token in `credentials.json` is Jira-scoped; the Bitbucket entry (label prefix `"Bitbucket API"`)
+  in the same file returns 401 against Jira — don't use it here.
 - Companion commands: **`/jira-comment`** to add a comment, **`/jira-attach`** to upload files.
 - **Never mention Claude or AI** in any field text.

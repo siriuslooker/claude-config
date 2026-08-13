@@ -502,7 +502,7 @@ done
 head_ 'Next steps for this repo'
 info_ '  1. gh auth login                 -- authenticate the GitHub CLI'
 info_ '  2. ~/.claude/credentials.json    -- bb reads its Bitbucket credentials from here'
-info_ '     (entry "Bitbucket API (<work-org>)"). The repo deliberately does NOT'
+info_ '     (the entry whose label starts with "Bitbucket API"). The repo deliberately does NOT'
 info_ '     contain this file; recreate it by hand. See README.md.'
 
 if [ "$bad" -gt 0 ]; then

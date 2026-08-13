@@ -276,7 +276,7 @@ $bad = @($results | Where-Object { $_.Status -notin @('already present', 'instal
 Write-Head 'Next steps for this repo'
 Write-Host '  1. gh auth login                 -- authenticate the GitHub CLI'
 Write-Host '  2. ~/.claude/credentials.json    -- bb reads its Bitbucket credentials from here'
-Write-Host '     (entry "Bitbucket API (<work-org>)"). The repo deliberately does NOT'
+Write-Host '     (the entry whose label starts with "Bitbucket API"). The repo deliberately does NOT'
 Write-Host '     contain this file; recreate it by hand. See README.md.'
 
 if ($bad.Count -gt 0) {

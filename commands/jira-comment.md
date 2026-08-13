@@ -141,12 +141,15 @@ hand-quoting — the body contains characters that will otherwise break the payl
 ```
 jq -Rs '{body:.}' draft.txt > payload.json
 
-tok=$(jq -r '.credentials[]|select(.label=="Jira API (<work-org>)").password' ~/.claude/credentials.json)
+jira=$(jq -r '[.credentials[]|select(.label|startswith("Jira API"))][0]' ~/.claude/credentials.json)
+site=$(jq -r '.hosts[0]' <<<"$jira")
+user=$(jq -r '.username' <<<"$jira")
+tok=$(jq -r '.password' <<<"$jira")
 curl -s -w "HTTP_STATUS:%{http_code}\n" -X POST \
   -H "Content-Type: application/json" \
-  -u "<work-email>:$tok" \
+  -u "$user:$tok" \
   --data-binary "@payload.json" \
-  "https://<jira-site>/rest/api/2/issue/<KEY>/comment"
+  "https://$site/rest/api/2/issue/<KEY>/comment"
 ```
 
 Expect `201`. With `--edit <comment-id>`, use `-X PUT` against
@@ -159,8 +162,8 @@ ADF on the way in, and content can be *silently dropped* while still returning s
 observed, not theoretical: a `204` description update once discarded everything after a `----` rule.
 
 ```
-curl -s -u "<work-email>:$tok" \
-  "https://<jira-site>/rest/api/2/issue/<KEY>/comment/<id>" \
+curl -s -u "$user:$tok" \
+  "https://$site/rest/api/2/issue/<KEY>/comment/<id>" \
   | jq -r '"chars: \(.body|length)", "bullets: \([.body|split("\n")[]|select(startswith("* "))]|length)", "ends with: \(.body|split("\n")|map(select(length>0))|last|.[0:60])"'
 ```
 
@@ -177,18 +180,18 @@ truncated comment sitting on the ticket.
 ## 7. Failure modes
 
 - **401** — the token is likely rotated. Tell the user to regenerate it at
-  `id.atlassian.com/manage-profile/security/api-tokens` and update the `"Jira API (<work-org>)"`
-  entry's `password` in `~/.claude/credentials.json`. Do not retry blindly.
+  `id.atlassian.com/manage-profile/security/api-tokens` and update the Jira entry's (label prefix
+  `"Jira API"`) `password` in `~/.claude/credentials.json`. Do not retry blindly.
 - **404** — wrong key, or the issue isn't visible to this account. Re-check the key and how it was
   resolved (§1); do not guess a different one.
 - **400** — almost always a malformed body. Re-check that `jq -Rs` built the payload.
 
 ## Notes
 
-- Auth host is the site URL `<jira-site>`, **not** `api.atlassian.com/ex/jira/<cloudId>`.
+- Auth host is the site URL (the Jira entry's `hosts[0]`), **not** `api.atlassian.com/ex/jira/<cloudId>`.
   Basic auth = `email:api-token`.
-- The token in `credentials.json` is Jira-scoped; the separate `"Bitbucket API (<work-org>)"` entry
-  in the same file returns 401 against Jira — don't use it here.
+- The token in `credentials.json` is Jira-scoped; the separate Bitbucket entry (label prefix
+  `"Bitbucket API"`) in the same file returns 401 against Jira — don't use it here.
 - Companion command: **`/jira-attach`** for uploading files (the REST attachment endpoint needs a
   different content type and the `X-Atlassian-Token: no-check` header).
 - **Never mention Claude or AI** in comment text.
