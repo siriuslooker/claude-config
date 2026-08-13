@@ -23,9 +23,13 @@
 !.gitattributes
 !README.md
 !CLAUDE.md
-# Per-host facts, imported by CLAUDE.md. Tracked on purpose: an absent import
-# target is undocumented behaviour, and a tracked file can never dangle.
-!CLAUDE.machine.md
+# Per-host facts. Only the TEMPLATE is tracked. The real CLAUDE.machine.md
+# describes specific machines — hostnames, LAN addresses, device serials, drive
+# layouts, internal service names — and stays local. Copy the example to
+# CLAUDE.machine.md on a new machine; CLAUDE.md imports that path, so it must
+# exist even if it is empty.
+!CLAUDE.machine.example.md
+CLAUDE.machine.md
 !settings.json
 !setup.ps1
 !setup.sh

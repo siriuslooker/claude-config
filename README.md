@@ -21,7 +21,7 @@ If you add a new tracked path, run `git add -A --dry-run` and read the list befo
 | Path | What |
 |---|---|
 | `CLAUDE.md` | Global instructions: implementation process, ticketing, branch/PR rules. Machine-agnostic by policy |
-| `CLAUDE.machine.md` | Per-host facts, one `## HOSTNAME` section each. Imported by `CLAUDE.md` |
+| `CLAUDE.machine.example.md` | Template for per-host facts. **The real `CLAUDE.machine.md` is gitignored** — copy this to it |
 | `settings.json` | Model, statusline, theme. No plugins or marketplaces |
 | `commands/` | Slash commands — session workflow (`start-session`, `save-context`, `end-session`, `init-project`), Jira (`jira-comment`, `jira-attach`, `jira-update`), plus `notify`, `deep-review`, `push-nuget` |
 | `agents/` | The **stack-ops agents**: `implement`, `verify`, `compile`, `test`, `qa`, `deploy` |
@@ -69,9 +69,18 @@ Then, separately:
    you. Entries used by the tracked commands: `"Jira API (<work-org>)"` (`password` = API token from
    id.atlassian.com/manage-profile/security/api-tokens), `"Bitbucket API (<work-org>)"`, `"Pushover"`
    (`token`, `userKey`).
-2. **Restart Claude Code** — agents and skills only load at startup, so they won't resolve in a session
+2. **Create `CLAUDE.machine.md`** — `CLAUDE.md` imports it and the repo does not carry it:
+
+   ```bash
+   cp ~/.claude/CLAUDE.machine.example.md ~/.claude/CLAUDE.machine.md
+   ```
+
+   Then replace the placeholder `## <HOSTNAME>` section with this machine's facts. Leaving it as the
+   bare template is fine; leaving it *absent* is not, because a missing import target is undocumented
+   behaviour.
+3. **Restart Claude Code** — agents and skills only load at startup, so they won't resolve in a session
    that was already running when you cloned.
-3. **Install the CLIs the commands assume** — `gh` (GitHub), `bb` (Bitbucket), `sqlcmd` (DB work).
+4. **Install the CLIs the commands assume** — `gh` (GitHub), `bb` (Bitbucket), `sqlcmd` (DB work).
    There is a script per platform at the repo root:
 
    ```powershell
@@ -111,8 +120,9 @@ Nothing else. No plugins, no marketplaces.
   one of those names would shadow them. (`implement` was called `build` until the name proved
   confusing — it reads as *compile*, which is a different agent entirely.)
 - **Per-host facts live in `CLAUDE.machine.md`**, imported by `CLAUDE.md`, with one `## HOSTNAME` section
-  per machine — add yours rather than editing another's. It is tracked on purpose: Claude Code documents
-  the `@import` syntax but *not* what happens when the target is missing, and a gitignored file is absent
-  on every fresh clone, so tracking it means the import can never dangle.
+  per machine. **That file is gitignored** — it names hosts, LAN addresses, device serials and drive
+  layouts, and none of that belongs in the repo. Only `CLAUDE.machine.example.md` is tracked. ⚠️ Claude
+  Code documents the `@import` syntax but *not* what happens when the target is missing, so **copy the
+  example to `CLAUDE.machine.md` as part of setting up a machine** — see step 2 above.
 - **The Jira commands are RD-specific**, keyed to `<jira-site>` and a matching
   credentials entry. On a personal machine they're inert; GitHub Issues via `gh` is the path there.

@@ -371,6 +371,9 @@ retrying blindly, and say plainly when it's unavailable:
 
 ## Machine-specific facts
 
-Anything true of one machine and not another lives in a separate file, so this one stays portable:
+Anything true of one machine and not another lives in a separate file, so this one stays portable.
+**That file is gitignored** — it names hosts, addresses, device serials and drive layouts, which do not
+belong in the repo. Only the template `CLAUDE.machine.example.md` is tracked; on a new machine, copy it
+to `CLAUDE.machine.md` before anything else, or this import has no target.
 
 @~/.claude/CLAUDE.machine.md
