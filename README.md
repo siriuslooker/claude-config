@@ -1,7 +1,11 @@
 # claude-config
 
 Version-controlled Claude Code configuration — the contents of `~/.claude` that are worth carrying
-between machines. Private repo.
+between machines.
+
+⚠️ **This repo is PUBLIC.** Nothing here may name a host, an address, a device serial, a drive layout,
+an internal service or an employer's tenant — write it as though a stranger is reading it, because one
+can. Per-machine facts have their own gitignored file; see *Known warts*.
 
 ## ⚠️ Secrets
 
@@ -22,35 +26,40 @@ If you add a new tracked path, run `git add -A --dry-run` and read the list befo
 |---|---|
 | `CLAUDE.md` | Global instructions: implementation process, ticketing, branch/PR rules. Machine-agnostic by policy |
 | `CLAUDE.machine.example.md` | Template for per-host facts. **The real `CLAUDE.machine.md` is gitignored** — copy this to it |
-| `settings.json` | Model, statusline, theme. No plugins or marketplaces |
-| `commands/` | Slash commands — session workflow (`start-session`, `save-context`, `end-session`, `init-project`), Jira (`jira-comment`, `jira-attach`, `jira-update`), plus `notify`, `deep-review`, `push-nuget` |
+| `settings.json` | Model, statusline, theme, hook registrations. No plugins or marketplaces |
+| `.gitattributes` | Line-ending normalisation |
+| `commands/` | 12 slash commands — session workflow (`start-session`, `save-context`, `end-session`, `init-project`, `adopt-project`), Jira (`jira-comment`, `jira-attach`, `jira-update`), plus `notify`, `deep-review`, `push-nuget`, `local-env` |
 | `agents/` | The **stack-ops agents**: `implement`, `verify`, `compile`, `test`, `qa`, `deploy` |
-| `skills/` | Per-stack skills the agents dispatch to (`{compile,test,deploy}-{netcore,node}`, `stack-detect`, `report-handoff`, `launch-local`) plus `authoring-stack-ops-skills` |
-| `hooks/` | `statusline.sh` |
-| `tools/` | `notify.ps1` (Pushover wrapper) |
+| `skills/` | 16 skills — per-stack (`{compile,test,deploy}-{netcore,node}`, `compile-netfx`, `{compile,qa}-expo-{ios,android}`), plus `stack-detect`, `report-handoff`, `launch-local`, `phase-loop`, `authoring-stack-ops-skills` |
+| `hooks/` | `statusline.sh`, `delegation-standing-request.sh` (restates the standing subagent request each turn), `pwsh-exec.sh` (resolves `pwsh` without trusting `PATH`) |
+| `tools/` | `notify.ps1` (Pushover), `run-notify.ps1` (wrap a command, push its outcome), `idle-notify.ps1` (push when a turn ends and nobody replies), `bg-task.sh` (make a background task visible in the status line), `reap-stale-dev-servers.ps1`, `find-leaked-dev-procs.ps1` |
 | `setup.ps1`, `setup.sh` | New-machine CLI installers (`gh`, `bb`, `sqlcmd`) — winget / Homebrew+apt |
 
 ### The stack-ops agents
 
 `implement` writes the code for a planned phase and is the only agent that writes source; `verify` is
 the read-only gate.
-They are stack-agnostic — a per-stack skill knows *how*. Only `netcore` and `node` are implemented;
-`netfx` is deliberately detected-but-unhandled as the worked example of that seam. To add a stack, use
-the `authoring-stack-ops-skills` skill — **add a skill, never edit an agent.**
+They are stack-agnostic — a per-stack skill knows *how*. Implemented today: `netcore`, `node`,
+`expo-ios` and `expo-android`, with `netfx` compile-only. To add a stack, use the
+`authoring-stack-ops-skills` skill — **add a skill, never edit an agent.**
 
-These began life as a Claude Code plugin in a separate Bitbucket repo. That was abandoned in favour of
-plain files here, because a marketplace registration bakes in an absolute path to the plugin working
-copy, and because a personal machine may have no Bitbucket access. **There is nothing to install** — a
-clone plus a `credentials.json` is a complete setup. The old `<work-org>/claude-agents-plugin` repo
-has been **deleted**; this repo is the only source. (Its git history survives only in a local working
-copy at `<local-path>` on <workstation> — the files were copied
-here, the commits were not.)
+These began life as a Claude Code plugin in a separate repo. That was abandoned in favour of plain
+files here, because a marketplace registration bakes in an absolute path to the plugin working copy,
+and because a personal machine may have no access to the host it lived on. **There is nothing to
+install** — a clone, a `credentials.json` and a `CLAUDE.machine.md` are a complete setup (both are
+covered in *Setting up a new machine* below). The old plugin repo has been **deleted**; this repo is
+the only source, and its commits were not carried over — only the files.
 
 ## Setting up a new machine
 
 ```bash
 git clone git@github.com:siriuslooker/claude-config.git ~/.claude-config
 ```
+
+⚠️ **Use the SSH remote, not HTTPS.** An HTTPS clone or `ls-remote` prompts for credentials and then
+*hangs with no error* in a non-interactive shell — which looks exactly like a network problem and
+isn't. Check an existing checkout with `git remote -v` and switch it with
+`git remote set-url origin git@github.com:siriuslooker/claude-config.git` if it reads `https://`.
 
 `~/.claude` already exists and contains live state, so **don't clone over it.** Either clone elsewhere
 and copy the tracked paths in, or initialise in place:
@@ -65,10 +74,10 @@ git checkout -f main       # tracked paths only; everything else is ignored
 
 Then, separately:
 
-1. **Recreate `credentials.json`** — it is not in the repo, and is the only thing a clone doesn't give
-   you. Entries used by the tracked commands: `"Jira API (<work-org>)"` (`password` = API token from
-   id.atlassian.com/manage-profile/security/api-tokens), `"Bitbucket API (<work-org>)"`, `"Pushover"`
-   (`token`, `userKey`).
+1. **Recreate `credentials.json`** — it is not in the repo and never will be. It holds one entry per
+   service the tracked commands talk to: an issue tracker, a source host, and Pushover (`token`,
+   `userKey`). **Each command names the entry key it reads** — open the one you need rather than
+   listing tenants here, which is how an internal hostname ends up on a public page.
 2. **Create `CLAUDE.machine.md`** — `CLAUDE.md` imports it and the repo does not carry it:
 
    ```bash
@@ -124,5 +133,6 @@ Nothing else. No plugins, no marketplaces.
   layouts, and none of that belongs in the repo. Only `CLAUDE.machine.example.md` is tracked. ⚠️ Claude
   Code documents the `@import` syntax but *not* what happens when the target is missing, so **copy the
   example to `CLAUDE.machine.md` as part of setting up a machine** — see step 2 above.
-- **The Jira commands are RD-specific**, keyed to `<jira-site>` and a matching
-  credentials entry. On a personal machine they're inert; GitHub Issues via `gh` is the path there.
+- **The Jira commands are work-specific**, keyed to one Atlassian tenant and a matching credentials
+  entry — both named in the commands themselves, not here. On a personal machine they're inert; GitHub
+  Issues via `gh` is the path there.

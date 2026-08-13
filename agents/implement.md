@@ -78,7 +78,7 @@ chasing failures you didn't cause.
      ⚠️ **Scoped means scoped. Do not run the whole repo's suite on every iteration, and do not run
      it once more "to be sure" before reporting.** The caller runs `verify` after you, which is the
      authoritative full pass — a full sweep from you is a duplicate of it, and on a five-iteration
-     run it is five duplicates. Measured on <workstation>: a full sweep drives the machine to 100% CPU
+     run it is five duplicates. Measured on a 12-core Windows box: a full sweep drives it to 100% CPU
      with ~626,000 syscalls/sec, roughly 39% of it kernel time spent in the antivirus filter driver,
      because the cost tracks the number of processes spawned rather than the work done. Run the
      packages you touched. Say in your report which ones you ran and which you did not, so the

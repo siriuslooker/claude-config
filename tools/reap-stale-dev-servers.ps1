@@ -8,11 +8,12 @@
   ending a Claude session, closing a terminal, or a crash all leave them running. They
   then sit for days.
 
-  Measured on <workstation> on 2026-08-11: 22 orphaned node processes, the oldest 127 hours
-  (five days), holding 2.7 GB. They arrived in clusters of six to eight, which is the
-  signature of one Metro plus its jest-worker transform pool. That machine also runs
-  <antivirus>, whose CPU cost tracks the NUMBER OF PROCESSES it has to watch rather than file
-  volume, so a pile of idle bundlers is not free even when they are doing nothing.
+  Measured on one Windows dev box, 2026-08-11: 22 orphaned node processes, the oldest 127
+  hours (five days), holding 2.7 GB. They arrived in clusters of six to eight, which is the
+  signature of one Metro plus its jest-worker transform pool. That machine also ran a
+  corporate on-access antivirus whose CPU cost tracks the NUMBER OF PROCESSES it has to
+  watch rather than file volume, so a pile of idle bundlers is not free even when they are
+  doing nothing.
 
   ## Why this runs at SessionStart and not SessionEnd
 

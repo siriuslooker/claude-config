@@ -4,7 +4,7 @@
   test runners and MCP servers left behind by earlier sessions.
 
 .DESCRIPTION
-  Long-lived dev processes accumulate silently. Measured on <workstation> on 2026-08-07: 68 node
+  Long-lived dev processes accumulate silently. Measured on one Windows dev box, 2026-08-07: 68 node
   processes, of which 54 were leaked — eight duplicate backend watchers from one day, six vite
   servers from a project not being worked on, twelve MCP servers from three sessions two days
   earlier, and three test runs that hung and never exited.
