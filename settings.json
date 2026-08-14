@@ -53,8 +53,7 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "bash ~/.claude/hooks/statusline.sh",
-    "refreshInterval": 6
+    "command": "bash ~/.claude/hooks/statusline.sh"
   },
   "enabledPlugins": {},
   "effortLevel": "medium",
