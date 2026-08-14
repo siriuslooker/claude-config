@@ -66,6 +66,13 @@ $procCsv = Join-Path $OutDir "perf-$stamp-process.csv"
 $cores   = [Environment]::ProcessorCount
 
 $sysCounters = @(
+    # % Processor UTILITY is the one to trust and the one Task Manager and
+    # HWiNFO show. % Processor Time is idle-thread sampling capped at 100% and
+    # blind to clock speed, so on a turboing CPU it UNDER-reports badly:
+    # measured 2026-08-14 on this box, Time said 54% while Utility said 84% and
+    # Performance was 149% of base. Both are kept so the gap stays visible.
+    '\Processor Information(_Total)\% Processor Utility'
+    '\Processor Information(_Total)\% Processor Performance'
     '\Processor(_Total)\% Processor Time'
     '\Processor(_Total)\% DPC Time'
     '\Processor(_Total)\% Interrupt Time'
@@ -104,11 +111,13 @@ function New-SysRow {
     param($Time, $Sample, $Note)
     [pscustomobject][ordered]@{
         time = $Time; sample = $Sample
+        cpu_utility_pct = ''; cpu_perf_pct = ''
         cpu_total_pct = ''; dpc_pct = ''; interrupt_pct = ''
         cpu_queue = ''; ctx_switches_sec = ''
         mem_avail_mb = ''; pages_sec = ''
         disk_busy_pct = ''; disk_queue = ''
         top1_name = ''; top1_pct_machine = ''
+        busy_pct_machine = ''
         proc_total = ''; proc_top_counts = ''
         note = $Note
     }
@@ -131,6 +140,8 @@ while ((Get-Date) -lt $deadline) {
             $hit = $v.Keys | Where-Object { $_ -like "*$suffix" } | Select-Object -First 1
             if ($hit) { [math]::Round($v[$hit], 2) } else { '' }
         }
+        $row.cpu_utility_pct  = Val '\% processor utility'
+        $row.cpu_perf_pct     = Val '\% processor performance'
         $row.cpu_total_pct    = Val '(_total)\% processor time'
         $row.dpc_pct          = Val '\% dpc time'
         $row.interrupt_pct    = Val '\% interrupt time'
@@ -176,47 +187,36 @@ while ((Get-Date) -lt $deadline) {
         $row.note = ($row.note + ' proc-error: ' + ($_.Exception.Message -replace '[,\r\n]', ';')).Trim()
     }
 
-    # --- everything else, by CPU-seconds delta --------------------------------
-    # The counter patterns above are a curated list, and a curated list is a
-    # guess: the first real run missed ms-teams burning 7.7% of the machine
-    # because it was not in the list. This sweep is pattern-free, so nothing
-    # hides. It CANNOT see protected processes (VIPRE reports 0.00 here) —
-    # that is exactly what the counter set above is for. The two are
-    # complementary and neither alone is sufficient.
+    # --- every process, protected included ------------------------------------
+    # Win32_PerfFormattedData_PerfProc_Process, NOT a Get-Process CPU delta.
+    # Two reasons, both found the hard way on 2026-08-14:
+    #   * A delta sweep must filter out processes whose .CPU is null — which is
+    #     every process the session cannot read, i.e. most SYSTEM services. That
+    #     silently accounted for only 31% of a machine that was 68% busy, and
+    #     the missing two-thirds looked like a mystery rather than a blind spot.
+    #   * This class reports protected processes too (VIPRE), so it needs no
+    #     companion pattern list and cannot miss an offender it wasn't told to
+    #     look for.
+    # PercentProcessorTime here is percent of ONE core, so a 12-core box tops
+    # out at 1200; divide by core count for percent-of-machine.
     try {
-        $nowProc = @{}
-        foreach ($p in (Get-Process -ErrorAction SilentlyContinue)) {
-            if ($null -ne $p.CPU) { $nowProc[$p.Id] = @{ n = $p.ProcessName; c = $p.CPU } }
-        }
-        if ($script:prevProc) {
-            $elapsed = ((Get-Date) - $script:prevProcAt).TotalSeconds
-            if ($elapsed -gt 0) {
-                $nowProc.Keys |
-                    Where-Object { $script:prevProc.ContainsKey($_) } |
-                    ForEach-Object {
-                        $d = $nowProc[$_].c - $script:prevProc[$_].c
-                        if ($d -gt 0) {
-                            [pscustomobject]@{
-                                pid_ = $_; name = $nowProc[$_].n
-                                pct  = [math]::Round(($d / $elapsed / $cores) * 100, 2)
-                            }
-                        }
-                    } |
-                    Sort-Object pct -Descending | Select-Object -First $TopN |
-                    ForEach-Object {
-                        [pscustomobject][ordered]@{
-                            time = $ts; sample = $sample
-                            process = "$($_.name)[$($_.pid_)]"
-                            pct_machine = $_.pct
-                            pct_one_core = [math]::Round($_.pct * $cores, 2)
-                        } | Export-Csv -Path $procCsv -NoTypeInformation -Append
-                    }
+        $all = Get-CimInstance Win32_PerfFormattedData_PerfProc_Process -ErrorAction Stop
+        $tot = ($all | Where-Object { $_.Name -eq '_Total' }).PercentProcessorTime
+        $idl = ($all | Where-Object { $_.Name -eq 'Idle' }).PercentProcessorTime
+        if ($tot) { $row.busy_pct_machine = [math]::Round((($tot - $idl) / $cores), 1) }
+
+        $all | Where-Object { $_.Name -notin @('_Total','Idle') -and $_.PercentProcessorTime -gt 0 } |
+            Sort-Object PercentProcessorTime -Descending | Select-Object -First $TopN |
+            ForEach-Object {
+                [pscustomobject][ordered]@{
+                    time = $ts; sample = $sample
+                    process      = "$($_.Name)[$($_.IDProcess)]"
+                    pct_machine  = [math]::Round($_.PercentProcessorTime / $cores, 2)
+                    pct_one_core = $_.PercentProcessorTime
+                } | Export-Csv -Path $procCsv -NoTypeInformation -Append
             }
-        }
-        $script:prevProc   = $nowProc
-        $script:prevProcAt = Get-Date
     } catch {
-        $row.note = ($row.note + ' delta-error: ' + ($_.Exception.Message -replace '[,\r\n]', ';')).Trim()
+        $row.note = ($row.note + ' allproc-error: ' + ($_.Exception.Message -replace '[,\r\n]', ';')).Trim()
     }
 
     # Process-count watch. 215 hung `git` orphans from a leaking status line
