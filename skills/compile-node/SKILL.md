@@ -87,3 +87,21 @@ npm audit --omit=dev
 ```
 
 Nothing else.
+
+## A build or sweep that outlasts one Bash call — own it, don't hand it back
+
+A full install, a monorepo build or a whole-repo test sweep can exceed the 10-minute cap on a single
+Bash call. **That cap is per CALL, not per turn**, so own it rather than returning with the work pending:
+
+```
+bash ~/.claude/tools/job.sh start "pnpm build" "pnpm -r build"
+  -> JOB=<id>
+bash ~/.claude/tools/job.sh wait <id> 480     # status=running  — call it again
+bash ~/.claude/tools/job.sh wait <id> 480     # status=done exit=0
+```
+
+⚠️ **Put the `wait` in a Bash call by ITSELF** — combining it with other commands blows the tool budget
+and loses the poll.
+
+**`status=vanished` is NOT success** — the pid is gone with no exit file, i.e. killed or the machine
+restarted. Report it as a failure; killed and completed are different outcomes.

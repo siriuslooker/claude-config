@@ -70,25 +70,44 @@ Report `versionCode` and `versionName` exactly as printed. **A prerelease suffix
 If you genuinely cannot run any badging tool, say so plainly and report the file stat alone — but
 **never silently skip this check.** It is the only thing that proves the install won't no-op.
 
-## Long builds: pick a waiting pattern deliberately and name it
+## Long builds: own them yourself with the job runner
 
-You cannot block-wait — foreground `sleep` is disabled and a turn ends when you stop calling tools.
+**A cold Android build (~13-16 min) exceeds the 10-minute cap on a single Bash call. That cap is per
+CALL, not per turn** — so you can own a build of any length by starting it detached and polling in
+bounded chunks. **Do not hand a build back to the caller, and do not end your turn with verification
+pending, unless the job runner is genuinely unavailable.**
 
-- **Foreground with a long timeout** — correct for a warm/incremental build. You verify in the same turn.
-- **Backgrounded** — necessary for a cold build (full install + prebuild + `assembleRelease`) that may
-  exceed the foreground ceiling. A backgrounded command re-invokes you when it exits, so your turn ending
-  is expected — but it must be explicit.
+```
+bash ~/.claude/tools/job.sh start "APK <version>" "wsl -d Ubuntu-24.04 -u root -- bash -lc 'bash /mnt/<path>/scripts/wsl/build.sh'"
+  -> JOB=<id>
+bash ~/.claude/tools/job.sh wait <id> 480     # status=running  — just call it again
+bash ~/.claude/tools/job.sh wait <id> 480     # status=done exit=0
+```
 
-**Never write "I'll wait for it to complete" and then end your turn.** That is ambiguous and the caller
-cannot tell whether verification is pending by design or was silently dropped. End with this shape
-instead:
+`start` returns immediately. `wait` polls to a budget under the cap and **is meant to be called
+repeatedly** — two or three calls covers a cold build. Also `status`, `log <id> [n]`, `stop`.
+
+⚠️ **Put the `wait` call in a Bash call by ITSELF.** Combining it with other commands is how you blow
+the tool budget and lose the poll — that happened the first time this runner was used in anger.
+
+**`status=vanished` is NOT success.** It means the pid is gone with no exit file — killed, or the machine
+restarted. Killed and completed are different outcomes; report it as a failure, never smooth it into a
+pass.
+
+Then verify the artifact and report: APK mtime, and **`aapt2 dump badging`** for the real
+versionCode/versionName. Reading identity from the artifact is mandatory — never install it somewhere
+just to ask what version it is.
+
+**Fallback only if the job runner is missing:** background the command and say so explicitly —
 
 > Build running in background (task `<id>`), cold build, expect ~N minutes. My turn ends here by design —
 > I'll be re-invoked when the process exits and will then run the post-build verification (APK mtime +
 > `aapt2` versionCode). **Verification is PENDING, not done.**
 
-If re-invoked while the build is still live, **re-state that pending status rather than relaunching.**
-Check for a live build/gradle process first and **never start a second concurrent build.**
+**Never write "I'll wait for it to complete" and then end your turn.** The caller cannot tell whether
+verification is pending by design or was silently dropped. If re-invoked while a build is still live,
+**re-state the pending status rather than relaunching** — check for a live gradle process first and
+**never start a second concurrent build.**
 
 Two traps when watching a build:
 
