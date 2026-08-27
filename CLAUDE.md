@@ -231,6 +231,50 @@ It takes the command as **one string** (`-Run`), not trailing arguments — Powe
 any `-flag` in the wrapped command to the script's own parameters, and a bare `--` is consumed by the
 parser before the script runs. Use a single-quoted here-string when the command contains quotes.
 
+### Long builds a SUBAGENT can own — `tools/job.sh`
+
+**The obstacle was never philosophy, it was a hard timeout.** The Bash tool caps a single call at 10
+minutes; a clean Android build here takes ~13. That is why builds were pushed to the main thread.
+
+**The cap is per CALL, not per agent turn** — an agent can make several sequential Bash calls. So a build
+of any length becomes agent-ownable if the wait is *bounded and resumable*:
+
+```
+bash ~/.claude/tools/job.sh start "APK 0.3.56" "wsl -d Ubuntu-24.04 -u root -- bash -lc 'bash /mnt/f/.../build.sh'"
+  -> JOB=apk-0356-20260827-124500-1234
+bash ~/.claude/tools/job.sh wait apk-0356-20260827-124500-1234 540   # status=running ...
+bash ~/.claude/tools/job.sh wait apk-0356-20260827-124500-1234 540   # status=done exit=0
+```
+
+`start` returns immediately. `wait` polls to a budget under the cap and **can simply be called again**.
+Also `status`, `log <id> [n]`, `stop`, `list`, `clean [days]`. State lives in `~/.claude/.jobs/<id>/`
+(`cmd label pid log exit started`), which the allowlist `.gitignore` already excludes — **do not add an
+entry for it.**
+
+So a `compile` agent now owns a build end to end: start it, poll it, read the artifact's identity with
+`aapt2`, diagnose failures, write findings to the work order, return `COMPLETE`. **The controller never
+sees gradle output.** Same shape for node builds and full test sweeps.
+
+**Three things it gets right, each of them a bug that was hit while building it:**
+
+- ⚠️ **`setsid` does NOT exist in Git Bash (MSYS)** — only in WSL. Agents run in Git Bash, so the script
+  falls back to `nohup`. A probe run inside WSL "confirmed" setsid was present and was simply testing the
+  wrong shell; the first build of this tool failed entirely on that.
+- **The detached shell records its OWN pid.** `$!` is the wrapper parent, which exits the instant it
+  forks, so liveness read as dead immediately and every job reported `vanished`.
+- **Liveness is `kill -0` on that pid plus the log's own growth — never a process name.** `pgrep -f` matches
+  its own invoking shell and any other process carrying the string; a watcher built that way once reported
+  `BUILDING` for thirty minutes after the build had finished.
+
+A job whose pid is gone with no `exit` file reports **`vanished`**, not success — killed and completed are
+different outcomes and must not be smoothed together.
+
+**This supersedes "run long work from the MAIN thread" for anything an agent should own.** That rule still
+holds for work the *controller* genuinely owns — deploys, git, an interactive login — and for cases where
+you want the harness to re-invoke the controller on completion. But a build is judgement work: it belongs
+to an agent, and now it can be.
+
+
 ### Make a background task VISIBLE — `tools/bg-task.sh`
 
 A session waiting on a five-minute build looks completely idle. Subagents appear in the status bar;
