@@ -103,6 +103,60 @@ down, every later automated check can use it. This is how a second phase becomes
 
 ---
 
+## 2b. Work orders — the DURABLE form of a brief, one per parallel unit
+
+⭐ **A brief passed as prompt text does its job and then ceases to exist.** A work order is the same brief
+as a **numbered, tracked file** — so it can be cited from a source comment months later
+(`/* CARDS, not horizontal rows (WO-12 §2) */`), read by the next agent that touches the same code, and
+audited without scrolling a transcript. **Where a project keeps them (`.claude/work-orders/`), write one
+per parallel unit of work and pass the agent its path instead of a wall of prompt.**
+
+They pair naturally with the fan-out in §6: **one work order per worktree**, and the file is where that
+worktree's boundary is written down.
+
+### Shape
+
+```markdown
+# Work Order 9 — <what and why, in one line>
+
+**Ticket:** EN-957 · **Phase:** P8 · **Branch:** `EN-957-fb11-nudge-a11y`
+**Worktree (your ONLY working directory):** F:\...\maps-wt-fb11-nudge-a11y
+
+## Standing rules
+1. Work only inside the worktree above. Never edit the main checkout.
+2. Use the phase-loop skill. This work order is its readiness answer sheet.
+3. No console narration. Your output is a `## Report` appended to this file.
+4. Commit on the existing branch. No push, no PR, no merge, no main.
+5. Do not edit docs/.
+6. Gate with the <stack> stack only. Your baseline is <N>.
+
+## The gap        <- what is wrong or missing, with citations
+## What to build  <- acceptance criteria, the risk verbatim, out-of-scope, stop conditions
+## Report         <- the agent appends here
+```
+
+### The three parts that carry the weight
+
+- 🔴 **The worktree path, named as the ONLY working directory.** Parallel agents on one repo is exactly
+  when an agent edits the wrong tree, and prose is what prevents it.
+- 🔴 **An explicit test baseline, with its provenance.** *"Your baseline is 679, not 659 — the previous
+  work order added 20 on this branch. A drop below 679 is a finding, not a pass."* ⚠️ **A stale baseline
+  is worse than none**, because an agent that inherits it reports a real regression as a pass.
+- ⭐ **`## Report` appended to the same file.** Brief and outcome live together, so the record survives the
+  session and the next reader gets both the intent and what actually happened.
+
+### When NOT to write one
+
+A work order costs a file and a review. For a genuinely small, self-contained change, prompt text is
+fine. Write one when the work is **parallel** (the boundary needs a home), **sequenced** (a later order
+must read an earlier one's Report), or **likely to be cited later** — which is most things that change
+behaviour a comment will need to justify.
+
+⚠️ **Do not invent work orders in a project that has no `.claude/work-orders/` directory.** Follow the
+project's own convention; if it has none, prompt briefs and the phase journal already cover it.
+
+---
+
 ## 3. Brief templates
 
 The agents are stack-agnostic and are extended by skills, never by editing them. So anything they must do
@@ -147,6 +201,25 @@ Decide, record in the journal, continue — **unless any of these hold**, in whi
 
 Reversal cost is the test, not deadline pressure. Where an assumption would be cheap to undo, decide and
 move; where undoing it means a migration or a re-print, wait.
+
+### Ask with AskUserQuestion, not with prose
+
+**When you stop for input, put it in `AskUserQuestion` — never in a closing paragraph.** A question
+buried in prose at the end of a long run is easy to miss and impossible to answer in one tap.
+
+- **Batch related decisions into one call** (up to four) rather than stopping repeatedly. A phase that
+  interrupts four times has not run semi-autonomously.
+- **Recommended option first, labelled `(Recommended)`**, and give each option a description that states
+  the trade-off rather than restating the label.
+- ⭐ **Ask the question the code raised, not the question the plan expected.** The best questions in a
+  real phase came from source contradicting a recorded claim — *"the schema already has this field, so do
+  you want a second concept or should the code honour the first?"* — not from the plan's own
+  `decisions-needed` list.
+- ⚠️ **If the developer is away, an AskUserQuestion still blocks.** Send the notification too (below), so
+  the question reaches a phone. The notification carries the question and a recommendation; the tool
+  carries the options.
+- **A decision they already made is not a question.** If a concern was raised and they chose anyway,
+  proceed and say so once — re-asking reads as not listening.
 
 ### Notification is a hard requirement, not a courtesy
 
@@ -200,7 +273,63 @@ the next one. Returning to a finished phase should mean reading one document, no
 
 ## 6. Running the loop
 
-Per increment: **branch → implement → verify (with claim audit) → `qa` → fix any gaps → commit → PR**.
+**Run the whole phase to completion in one go, at the maximum parallelism the work honestly allows.**
+Cut ONE branch for the phase, fan out, and do not stop for approval between increments. The only
+reasons to stop are in §4 and at the end of this section — a blocker, a question, or an issue.
+
+### Parallelise by FILE, and be honest about what that permits
+
+Default to parallel. Give each concurrent agent its own **worktree** (`isolation: "worktree"`), and
+**partition the work by the files it touches**, naming the boundary in every brief: *"agent B is editing
+X and Y concurrently — do not touch them."* Where the project keeps work orders, that boundary belongs in
+one — see §2b.
+
+⚠️ **"Maximum parallelism" is a target, not a licence to pretend disjointness that is not there.** Two
+increments editing the same file are not parallel work with a merge at the end; they are one queue with
+extra steps. Measured on a real phase: five increments, four of which all edited the same 6,000-line
+component and its stylesheet and its test file — only the fifth (a different subsystem entirely) could
+run alongside. **Running the other four concurrently would have bought merge conflicts and, worse, the
+semantic collisions a clean conflict check cannot see.**
+
+So each round: take the largest set of increments whose file sets are disjoint, run those together, land
+them, then take the next set. **A file-disjoint increment is free parallelism — take it every time.** If
+nothing is disjoint, run one at a time and say so in the journal rather than faking a fan-out.
+
+⭐ **Investigation parallelises even when implementation does not.** Read-only probes — tracing a call
+path, inventorying which tests a change will break, measuring a layout budget — have no file conflicts at
+all, so fan out as many as the question has independent parts. On a real phase three such probes run
+before any code was written turned up four false claims in the plan. **That is the cheapest parallelism
+available and it is routinely left on the table.**
+
+### Landing an agent's work — the trap that looks like success
+
+Implementation agents are told never to touch git, so **their work is UNCOMMITTED in the worktree.**
+`git merge <worktree-branch>` therefore reports *"Already up to date"* and lands **nothing**, silently,
+looking exactly like success.
+
+Take the diff across instead, and remember `git diff` omits untracked files:
+
+```
+cd <worktree> && git status --short && git diff > /tmp/inc.patch
+cd <main tree> && git apply --check /tmp/inc.patch && git apply /tmp/inc.patch
+# then copy any `??` files listed by status --short — new modules and new test files
+```
+
+⚠️ **Never `git add -A` after applying.** A running local rig writes runtime data into the tree, and a
+blanket add commits it. Add the paths the patch named.
+
+### Verify the MERGED tree, not each branch
+
+Every agent verifies its own worktree, which contains none of the others' work. **Run the full suite on
+the combined tree after each landing** and reconcile the count arithmetically (baseline − retired +
+added). Two green branches have put a `main` red on a real project; a clean conflict check is not
+evidence.
+
+### Per increment
+
+**implement → land → verify (with claim audit) → `qa` → fix any gaps → commit.**
+
+**PR, merge, deploy and the QA doc happen ONCE, at the end of the phase — not per increment.**
 
 **`qa` is not optional and not skippable because the change "has no UI".** Nothing enters a PR that has
 not been exercised in a running app. The increment's own `manual-test` field is the script — if that
@@ -210,11 +339,29 @@ genuinely cannot be exercised is a badly-written increment, not an exemption.
 Skipping it is easy to rationalise when the diff looks internal. Sync internals, merge rules and schema
 changes are exactly where a green suite and a broken app coexist most comfortably.
 
-### Report sparingly while running
+### 🔇 Console silence while building — a hard rule, controller AND subagents
 
-The developer is away; intra-step narration is unread output. **Between increments, say almost nothing.**
-The journal is the record — write there, not to the console. Report to the console at a pause, at a
-completion, or when asked.
+**Say NOTHING to the console between the start of the phase and its end.** Not progress, not "increment
+3 landed", not a summary of what an agent reported, not a restatement of the plan. The developer is away;
+intra-step narration is unread output that costs context and buries the two moments that matter — a
+question, and the finish.
+
+- **The controller is silent.** Land the work, verify, commit, move on. **The journal is the record —
+  write there, not to the console.**
+- **Subagents are silent too.** Put it in every brief: *report the capped digest and write detail to the
+  report file; do not narrate progress.* The `report-handoff` convention already caps the reply; the
+  brief is what stops an agent padding it.
+- **Never echo a subagent's report back to the console.** Read it, act on it, record what mattered in the
+  journal.
+
+**The only things that may break silence, ever:**
+
+1. An **AskUserQuestion** — see §4.
+2. The **end-of-phase summary** — see below.
+3. A genuine **hard stop** from the list at the end of this section.
+
+⭐ **A tool call is not console output.** Running commands, spawning agents and editing files are all
+silent by this rule; it governs prose written *to the developer*.
 
 ### Watch the context budget
 
@@ -226,12 +373,43 @@ stopped for context rather than for a problem.
 Between increments, check whether anything learned invalidates a later increment's plan. A phase plan
 written before the phase started is a hypothesis.
 
-### At the phase boundary
+### At the phase boundary — run ALL of it, in order, without stopping to ask
 
-1. **Code review** across the whole phase diff. Calibrate the reviewer first — see §7.
-2. **Human QA document** covering the phase's features, in the project's existing QA format.
-3. **Deploy** to the test rig.
-4. **Notify** that the phase is ready for testing.
+Only when every increment is landed. Do not pause between these steps for approval; a phase that stops
+at step 3 has delivered nothing a human can look at.
+
+1. **Code review** across the whole phase diff. Calibrate the reviewer first — see §7. ⚠️ **Expect it to
+   find real bugs in already-merged, already-green code** — on a real phase it found four, one of which
+   erased a session's undo history. **Fix what it finds before the PR**, and re-verify.
+2. **Full `verify` gate** over the whole repo — every stack, including ones no agent touched. Agents test
+   the package they edited; nothing has yet built the rest against their work.
+3. **Phase journal** — every autonomous decision, everything considered and rejected, and everything
+   knowingly left wrong so a later session does not "fix" it as a bug.
+4. **Commit, push, open the PR, merge it.** Follow the project's own PR policy from its `CLAUDE.md`; if
+   that policy requires asking, ask — otherwise merge.
+5. **Deploy to the local test rig, standing it up if it is not running.** Follow the project's own
+   procedure (a `local-env.json` manifest, or the bring-up steps in its QA/rig doc). ⭐ **Then prove the
+   rig is serving the build you just merged** — a version/health endpoint carrying a commit is the only
+   honest check, and a stale bundle has invalidated real QA passes. **Never start a surface whose port is
+   already listening.**
+6. **Write the human QA document** in the project's existing QA format, as a tracked file in its `docs/`
+   (plus an index line if the project has one). ⭐ **Lead it with a section naming what is genuinely
+   UNCERTAIN and telling the reader to spend attention there** — a passing suite is the document's input,
+   not its subject. Separate *undecided* (a judgement call you deliberately did not guess) from
+   *unverified* (nobody has looked). Include anything no test can settle — visual, layout, feel — and any
+   defect shipped knowingly, with its reason.
+   ⚠️ **Never write "measured" for a number you estimated.** That word is a claim; one estimate dressed as
+   a measurement sent a developer to inspect a non-problem on a real phase.
+7. **End-phase summary to the console** — the one time prose is wanted. Keep it tight, and it MUST carry
+   **two clickable links**: the **QA document** and the **rig's entry point** (the URL a human actually
+   opens, not the API's health endpoint). Use `file:///` URLs for repo docs so they are ctrl-clickable.
+   Then: what shipped, test counts before/after, what needs their eyes, and anything left knowingly wrong.
+8. **Notify** — phase complete and ready for QA, naming the QA doc and the rig URL, so it is actionable
+   from a phone without opening the console.
+
+```
+pwsh -NoProfile -File "$HOME/.claude/tools/notify.ps1" -Message "..." -Title "..."
+```
 
 ### Hard stops, regardless of the classifier
 
