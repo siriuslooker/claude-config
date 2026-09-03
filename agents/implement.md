@@ -93,6 +93,10 @@ chasing failures you didn't cause.
    Length is free here: every file changed and why, the diff summary, each iteration and what it
    fixed, final compile/test state, acceptance criteria checked off individually, observations and
    out-of-scope items you noticed, and the exact blocker if you stopped.
+   ⭐ **If the caller gave you a WORK ORDER path, append your `## Report` to that file instead** — load
+   the `work-order` skill for what it must cover. Intent and outcome then live together in a file that
+   survives the session and can be cited from a source comment, which a report file keyed to the agent
+   type cannot: the next `implement` run overwrites it.
 8. **Return the digest.**
 
 ## Return this digest

@@ -103,57 +103,22 @@ down, every later automated check can use it. This is how a second phase becomes
 
 ---
 
-## 2b. Work orders — the DURABLE form of a brief, one per parallel unit
+## 2b. Work orders — the durable form of a brief
 
-⭐ **A brief passed as prompt text does its job and then ceases to exist.** A work order is the same brief
-as a **numbered, tracked file** — so it can be cited from a source comment months later
-(`/* CARDS, not horizontal rows (WO-12 §2) */`), read by the next agent that touches the same code, and
-audited without scrolling a transcript. **Where a project keeps them (`.claude/work-orders/`), write one
-per parallel unit of work and pass the agent its path instead of a wall of prompt.**
+⭐ **A brief passed as prompt text does its job and then ceases to exist.** Where a project keeps work
+orders (`.claude/work-orders/`), write one per parallel unit and pass the agent its path instead of a
+wall of prompt — a numbered tracked file can be cited from a source comment months later, read by the
+next agent to touch that code, and it is where the agent appends its own report.
 
-They pair naturally with the fan-out in §6: **one work order per worktree**, and the file is where that
-worktree's boundary is written down.
+**They pair directly with the fan-out in §6: one work order per worktree**, and the file is where that
+worktree boundary is written down.
 
-### Shape
+🔴 **The format, the four parts that carry the weight, and how an agent writes its `## Report` are in the
+`work-order` skill. Load it rather than reproducing them here** — it is referenced by the agents too, so
+an agent appending a report can reach the convention without loading this whole process.
 
-```markdown
-# Work Order 9 — <what and why, in one line>
-
-**Ticket:** EN-957 · **Phase:** P8 · **Branch:** `EN-957-fb11-nudge-a11y`
-**Worktree (your ONLY working directory):** F:\...\maps-wt-fb11-nudge-a11y
-
-## Standing rules
-1. Work only inside the worktree above. Never edit the main checkout.
-2. Use the phase-loop skill. This work order is its readiness answer sheet.
-3. No console narration. Your output is a `## Report` appended to this file.
-4. Commit on the existing branch. No push, no PR, no merge, no main.
-5. Do not edit docs/.
-6. Gate with the <stack> stack only. Your baseline is <N>.
-
-## The gap        <- what is wrong or missing, with citations
-## What to build  <- acceptance criteria, the risk verbatim, out-of-scope, stop conditions
-## Report         <- the agent appends here
-```
-
-### The three parts that carry the weight
-
-- 🔴 **The worktree path, named as the ONLY working directory.** Parallel agents on one repo is exactly
-  when an agent edits the wrong tree, and prose is what prevents it.
-- 🔴 **An explicit test baseline, with its provenance.** *"Your baseline is 679, not 659 — the previous
-  work order added 20 on this branch. A drop below 679 is a finding, not a pass."* ⚠️ **A stale baseline
-  is worse than none**, because an agent that inherits it reports a real regression as a pass.
-- ⭐ **`## Report` appended to the same file.** Brief and outcome live together, so the record survives the
-  session and the next reader gets both the intent and what actually happened.
-
-### When NOT to write one
-
-A work order costs a file and a review. For a genuinely small, self-contained change, prompt text is
-fine. Write one when the work is **parallel** (the boundary needs a home), **sequenced** (a later order
-must read an earlier one's Report), or **likely to be cited later** — which is most things that change
-behaviour a comment will need to justify.
-
-⚠️ **Do not invent work orders in a project that has no `.claude/work-orders/` directory.** Follow the
-project's own convention; if it has none, prompt briefs and the phase journal already cover it.
+⚠️ **Do not introduce work orders into a project that has no such directory.** Prompt briefs plus the
+phase journal already cover it there.
 
 ---
 
