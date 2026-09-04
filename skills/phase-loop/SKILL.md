@@ -392,6 +392,35 @@ written before the phase started is a hypothesis.
 Only when every increment is landed. Do not pause between these steps for approval; a phase that stops
 at step 3 has delivered nothing a human can look at.
 
+🔴 **THE PHASE IS NOT DONE UNTIL ALL EIGHT STEPS ARE DONE. "The code is written and green" is step 2 of
+8.** Every increment landing, a clean gate and a written journal together still leave the developer with
+**nothing they can look at** — no merged branch, no running rig, no document telling them what to check.
+
+⚠️ **Stopping here to ask permission is itself the failure mode, and it is the most likely one**, because
+after a long build the boundary *feels* like a natural handoff point. It is not: it is the half of the
+phase that turns work into something a human can act on. **Observed on a real phase** — a run landed
+seven increments, fixed six review findings, gated clean, wrote the journal, and then asked whether to
+continue. The developer's answer was that this should never have been a question.
+
+**So: do not ask. Do not summarise progress and wait. Do not say "want me to close that out?".** The only
+things that may interrupt the boundary are the §4 escalation triggers and a hard stop — a *blocker*, not
+a checkpoint. If the project's PR policy genuinely requires asking (step 4), ask **that one question**
+and keep going through the rest.
+
+**Before you claim the phase is finished, check every line:**
+
+- [ ] 1 — code review run, findings **fixed**, re-verified
+- [ ] 2 — full `verify` gate, every stack
+- [ ] 3 — phase journal written
+- [ ] 4 — committed, **pushed**, PR opened, **merged**
+- [ ] 5 — deployed to the local rig, and the rig **proven** to serve the merged commit
+- [ ] 6 — human QA document written, tracked, indexed
+- [ ] 7 — end-phase summary with both clickable links
+- [ ] 8 — **notification sent**
+
+**Any unchecked line means the phase is still running.** Say "the phase is complete" only when all eight
+are checked, and if one cannot be done, name it and say why rather than quietly dropping it.
+
 1. **Code review** across the whole phase diff. Calibrate the reviewer first — see §7. ⚠️ **Expect it to
    find real bugs in already-merged, already-green code** — on a real phase it found four, one of which
    erased a session's undo history. **Fix what it finds before the PR**, and re-verify.
