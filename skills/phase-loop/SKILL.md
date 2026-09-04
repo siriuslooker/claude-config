@@ -310,6 +310,18 @@ cd <main tree> && git apply --check /tmp/inc.patch && git apply /tmp/inc.patch
 ⚠️ **Never `git add -A` after applying.** A running local rig writes runtime data into the tree, and a
 blanket add commits it. Add the paths the patch named.
 
+🔴 **A worktree is cut from the COMMITTED branch tip, so uncommitted edits to a brief never reach it.**
+Measured the hard way: an agent was dispatched with a prompt citing a section of its own work order that
+did not exist in its checkout, because the controller had appended that section and not yet committed it.
+The agent inferred the boundary and said so — but it might equally have proceeded without one.
+**Commit brief and boundary changes BEFORE launching the worktree that needs them**, and when a brief is
+edited after dispatch, tell the running agent rather than assuming it can see the edit.
+
+⚠️ **Expect the brief file itself to conflict when you land the diff**, for exactly that reason: the
+agent appended its report to the version it had. That conflict is noise — **apply the source with
+`--exclude` on the brief path, then merge the report section by hand.** Do not let a markdown conflict
+make a clean source landing look failed.
+
 ### Verify the MERGED tree, not each branch
 
 Every agent verifies its own worktree, which contains none of the others' work. **Run the full suite on
