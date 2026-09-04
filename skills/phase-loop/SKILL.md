@@ -242,29 +242,56 @@ the next one. Returning to a finished phase should mean reading one document, no
 Cut ONE branch for the phase, fan out, and do not stop for approval between increments. The only
 reasons to stop are in §4 and at the end of this section — a blocker, a question, or an issue.
 
-### Parallelise by FILE, and be honest about what that permits
+### Parallelise by REGION, not by file
 
-Default to parallel. Give each concurrent agent its own **worktree** (`isolation: "worktree"`), and
-**partition the work by the files it touches**, naming the boundary in every brief: *"agent B is editing
-X and Y concurrently — do not touch them."* Where the project keeps work orders, that boundary belongs in
-one — see §2b.
+Default to parallel, and **default hard**. Give each concurrent agent its own **worktree**
+(`isolation: "worktree"`), and **partition the work by the regions it touches**, naming the boundary in
+every brief: *"agent B is editing X and Y concurrently — do not touch them."* Where the project keeps work
+orders, that boundary belongs in one — see §2b.
 
-⚠️ **"Maximum parallelism" is a target, not a licence to pretend disjointness that is not there.** Two
-increments editing the same file are not parallel work with a merge at the end; they are one queue with
-extra steps. Measured on a real phase: five increments, four of which all edited the same 6,000-line
-component and its stylesheet and its test file — only the fifth (a different subsystem entirely) could
-run alongside. **Running the other four concurrently would have bought merge conflicts and, worse, the
-semantic collisions a clean conflict check cannot see.**
+🔴 **A shared file is NOT a reason to serialize.** Two increments editing distinct regions of one large
+component are ordinary parallel work, and taking their diffs across merges fine. Big components are
+exactly where the work piles up, so "same file → one at a time" serializes almost every real phase — the
+wrong default, and it costs most of the point of running a phase unattended.
 
-So each round: take the largest set of increments whose file sets are disjoint, run those together, land
-them, then take the next set. **A file-disjoint increment is free parallelism — take it every time.** If
-nothing is disjoint, run one at a time and say so in the journal rather than faking a fan-out.
+**So partition the file and run them together.** A region partition is a table: increment, the symbols and
+line ranges it owns in each shared file, and what it owns outright. Put the *whole* table in *every*
+brief, not just each agent's own row — an agent that cannot see its neighbours' territory cannot avoid it.
+
+⚠️ **What actually breaks a concurrent round is not co-editing, it is churn.** Make these non-negotiable
+in every brief:
+
+- **No refactoring shared helpers. No reordering imports. No reformatting, re-indenting or re-wrapping any
+  region you are not changing.** A cosmetic reflow of a neighbour's region is a semantic collision a clean
+  conflict check cannot see.
+- **Everyone adding tests to one test file adds them inside their own `describe` block**, at their own
+  region — nobody restructures the file or touches its shared helpers.
+- **Nobody touches shared config, design tokens, or lockfiles.**
+- **Name the specific cross-increment interactions**: two agents extending the same UI affordance, two
+  timing constants that must stay clear of each other, two edits near one shared call site. Say which
+  agent owns which, and that it gets verified on the merged tree.
+- **An agent that genuinely needs another's region STOPS and reports.** That is a real finding about the
+  partition — re-plan rather than merge a guess.
+
+**Reserve serialization for real dependencies:** B needs A's output to exist, or B's change is meaningless
+until A's has landed. ⚠️ **Check that second one honestly — a dependency on the user-visible OUTCOME is not
+a dependency on the code.** If both land in the same merge they can be built at the same time; say so in
+the brief, and tell the agent that its neighbour's absence from its worktree is expected rather than a
+broken checkout.
+
+🔴 **Never predict a file set — read it.** Two increments were serialized on a real phase because their
+briefs *said* both touched the big component. One turned out to live entirely in a different module and
+the other had deliberately stayed out of it: **they were disjoint, and the round was serialized for
+nothing.** If you are about to serialize, open the files first.
 
 ⭐ **Investigation parallelises even when implementation does not.** Read-only probes — tracing a call
 path, inventorying which tests a change will break, measuring a layout budget — have no file conflicts at
-all, so fan out as many as the question has independent parts. On a real phase three such probes run
-before any code was written turned up four false claims in the plan. **That is the cheapest parallelism
-available and it is routinely left on the table.**
+all, so fan out as many as the question has independent parts. On a real phase, probes run before any code
+was written turned up four false claims in the plan. **That is the cheapest parallelism available and it
+is routinely left on the table.**
+
+🔴 **Then gate on the MERGED tree** — see below. Concurrency's cost is paid there, not at dispatch, and
+that check is what makes an aggressive fan-out safe rather than lucky.
 
 ### Landing an agent's work — the trap that looks like success
 
@@ -293,6 +320,16 @@ evidence.
 ### Per increment
 
 **implement → land → verify (with claim audit) → `qa` → fix any gaps → commit.**
+
+**In a concurrent round the shape is the same, just wider:** dispatch every increment's `implement` at
+once, then **land them one at a time, running the full suite after each landing** so a break is attributed
+to the diff that caused it rather than to the pile. Then `verify` with a claim audit over the merged
+result, and `qa` the merged app — a per-worktree QA pass proves nothing about what ships, because no
+worktree contains the others' work.
+
+⚠️ **The claim audit gets MORE important as the fan-out widens, not less.** Each agent reports a count
+measured in its own worktree, and none of those numbers is the suite total. **Reconcile arithmetically on
+the merged tree and never adopt an agent's figure as the phase's.**
 
 **PR, merge, deploy and the QA doc happen ONCE, at the end of the phase — not per increment.**
 
