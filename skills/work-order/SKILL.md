@@ -41,8 +41,9 @@ work-order file nobody else writes is clutter rather than a pattern.
 ```markdown
 # Work Order 9 — <what and why, in one line>
 
-**Ticket:** EN-957 · **Phase:** P8 · **Branch:** `EN-957-fb11-nudge-a11y`
-**Worktree (your ONLY working directory):** F:\...\maps-wt-fb11-nudge-a11y
+**Ticket:** PROJ-123 · **Phase:** P8 · **Branch:** `PROJ-123-<short-slug>`
+**Ledger:** `NUDGE-A11Y` (state lives there, not here)
+**Worktree (your ONLY working directory):** <absolute path to the worktree>
 
 **Read [`WO-2-...`](WO-2-...md) and its `## Report` first** — that work is already committed on this
 branch and this order extends it. You are adding a commit, not starting over.
@@ -51,7 +52,7 @@ branch and this order extends it. You are adding a commit, not starting over.
 1. Work only inside the worktree above. Never edit the main checkout.
 2. No console narration. Your output is a `## Report` appended to this file.
 3. Commit on the existing branch. No push, no PR, no merge, no main.
-4. Do not edit `docs/`.
+4. Do not edit `docs/` — and never edit the work ledger. Cite its ids; the controller sets state.
 5. Gate with the <stack> stack only. Your baseline is <N>.
 
 ## The gap
@@ -63,6 +64,17 @@ branch and this order extends it. You are adding a commit, not starting over.
 ## Report
 <the agent appends here>
 ```
+
+### 🔴 A work order carries no status of its own
+
+**Whether the work is done is a ledger fact.** The order records what was asked and what happened; it
+never records where the work has got to. So it has no `status:` line, no checkbox, no ✅ beside its
+title — and **the presence or absence of a `## Report` section is not a status signal either.** It used
+to be the only way to tell, which meant an order whose agent stopped early read as unfinished work and an
+order nobody had dispatched read the same, with nothing able to tell them apart.
+
+Cite the ledger id in the header instead, and let the ledger answer the question. Where the project has
+no ledger, the phase journal and the commit trail answer it — still not the order.
 
 ### The four parts that carry the weight
 
@@ -90,6 +102,9 @@ They look like boilerplate and are not. Each one exists because its absence cost
   that opens a PR has made a decision that was not its to make.
 - **Do not edit `docs/`** — documentation is reconciled at the end, by whoever can see the whole phase. An
   agent editing docs mid-flight produces a doc describing one increment as if it were the state of things.
+- **Never edit the ledger** — for the same reason agents never touch git. Several worktrees each editing
+  one small file conflict on every phase, and state written from inside a worktree describes a tree
+  nothing has merged yet.
 
 ---
 
@@ -101,7 +116,8 @@ wrong. Say so in your report instead; that contradiction is often the most valua
 
 Cover, briefly:
 
-- **What you changed**, by file, and what you deliberately did not.
+- **What you changed**, by file, and what you deliberately did not. Cite the ledger id the order names —
+  but **do not assert its state**; say what you did and let the controller set it.
 - **Numbers from your own run** — before/after test counts, compile and lint state. ⚠️ **Never restate a
   count you were given without re-running it.**
 - **Every decision you took without asking**, with its reasoning — and decisions **considered and

@@ -44,12 +44,9 @@ day's output reviewable by someone who is not reading the diff.
 
 ### Per-increment fields
 
-Keep them exactly as named — they are parsed.
-
 ```
 ### <ID> — <short title>
-- **status:** planned | ready | running | blocked | done
-- **depends-on:** <IDs, or none>
+- **ledger:** <ledger item id, or none where the project has no ledger>
 - **surfaces:** <the packages/layers touched>
 - **done-when:** <a criterion that can be checked, not a description of the work>
 - **manual-test:** <what a person does to see it works>
@@ -57,9 +54,23 @@ Keep them exactly as named — they are parsed.
 - **risk:** <the specific failure mode; "none known" is allowed>
 ```
 
-**`status: ready` is the gate.** It means the increment can start without asking anyone a question.
-Anything listed in `decisions-needed` must be answered, or an assumption recorded in the project's
-decision log, before it can be `ready`.
+These fields are **content** — they say what the increment is and how you would know it worked. They do
+not say where it has got to.
+
+🔴 **The plan carries no status field.** It used to declare `planned | ready | running | blocked | done`
+and assert that those values were parsed. **Nothing ever parsed them**, so the enum was a second home for
+state that drifted from the first — the failure the `work-ledger` skill exists to remove. **State lives in
+the ledger item named by `ledger:`**, and dependencies live in that item's `dependsOn`, where they are
+machine-checkable and a dependency on already-landed work is a reported defect rather than a stale line in
+a plan.
+
+**Readiness is `decidedIn` on the ledger item**, not a value you type here: an increment can start when
+its open questions are answered or an assumption is recorded in the project's decision log, and the
+validator flags an item in flight without one.
+
+⚠️ **A project with no ledger keeps its increments in the plan alone.** Write `ledger: none`, track
+progress in the phase journal, and do not invent a status field to replace the one that was retired —
+the journal and the commit trail are the record.
 
 **`risk` names the failure mode, not the difficulty.** "Touches three packages" is useless to an agent.
 "A wrong derivation produces a plausible grid with the wrong dates" gets checked.
@@ -134,7 +145,10 @@ that they would not do by default goes in the **brief**.
 - An explicit out-of-scope list, with instruction to **stop and report rather than improvise**.
 - **Stop conditions** — circumstances where stopping is the correct outcome, not a failure. This is what
   turns "an agent quietly patched a shared primitive" into "an agent surfaced a latent defect".
+- The increment's **ledger id**, so the agent's report can cite it.
 - "Never touch git." The controller owns branches, commits and PRs.
+- "Never write the ledger." Same reason: concurrent worktrees would each edit one file and conflict on
+  every phase. Agents cite ledger ids; the controller sets state.
 
 ### Every verify brief — the claim audit
 
@@ -331,7 +345,19 @@ evidence.
 
 ### Per increment
 
-**implement → land → verify (with claim audit) → `qa` → fix any gaps → commit.**
+**implement → land → verify (with claim audit) → `qa` → fix any gaps → commit → set the ledger item.**
+
+Where the project has a ledger, the controller sets the item to `in-progress` at dispatch and to
+`landed` once it is committed and gated — nowhere else, and never in the plan. Re-render and re-validate
+at the phase boundary rather than per increment:
+
+```
+pwsh -NoProfile -File "$HOME/.claude/tools/work-ledger.ps1" -Render -Ledger <ledger> -Into <status doc>
+pwsh -NoProfile -File "$HOME/.claude/tools/work-ledger.ps1" -Validate -Ledger <ledger>
+```
+
+⚠️ **No ledger in the project? Skip this and record progress in the journal.** Nothing else in the loop
+depends on one.
 
 **In a concurrent round the shape is the same, just wider:** dispatch every increment's `implement` at
 once, then **land them one at a time, running the full suite after each landing** so a break is attributed
@@ -427,7 +453,9 @@ are checked, and if one cannot be done, name it and say why rather than quietly 
 2. **Full `verify` gate** over the whole repo — every stack, including ones no agent touched. Agents test
    the package they edited; nothing has yet built the rest against their work.
 3. **Phase journal** — every autonomous decision, everything considered and rejected, and everything
-   knowingly left wrong so a later session does not "fix" it as a bug.
+   knowingly left wrong so a later session does not "fix" it as a bug. Where the project has a ledger,
+   set every landed increment's item, add items for anything the phase discovered and did not build, then
+   render and validate. Anything knowingly left wrong is a ledger item, not only a journal paragraph.
 4. **Commit, push, open the PR, merge it.** Follow the project's own PR policy from its `CLAUDE.md`; if
    that policy requires asking, ask — otherwise merge.
 5. **Deploy to the local test rig, standing it up if it is not running.** Follow the project's own
