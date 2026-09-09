@@ -262,6 +262,29 @@ line, machine-greppable, severity-first.
 **not-checkable**, is reported as such, and is never counted as clean — absence of evidence is its own
 outcome, never a pass. This is the same rule the stack-ops agents follow, and for the same reason.
 
+### 🔴 The drift baseline is a COMMIT, not a date — `opened` alone is too coarse
+
+`git log --since=<date>` has **day granularity**, so every commit made earlier on the same calendar day
+as `opened` reads as movement. That is not a hypothetical: on the first morning the check could fire, it
+produced **11 false findings** — 4 `PROBABLY-SHIPPED` and 7 `PARTIALLY-MOVED` — every one of them
+tracing to a single source file legitimately committed a few hours *before* the ledger existed.
+
+So the ledger carries a **`baseCommit`**: a full SHA, top-level as the default for every item, and
+optional per item for anything opened later.
+
+```json
+{ "schema": 1, "baseCommit": "cd30995571243683e6d27a532194058841c32a9e", "items": [ ... ] }
+```
+
+**The check prefers `baseCommit` when present** (`git log <sha>..HEAD -- <path>`, which is exact) and
+falls back to `--since=opened` only when it is absent, reporting that it did so. Verified on the same
+data that produced the 11 false findings: after the true baseline, the file had **zero** commits.
+
+⚠️ **Note which direction this failed in.** These were false *alarms*, not false passes — the check
+cried shipped about open work. Still worth fixing immediately: a check that is wrong on its first real
+morning does not get a second chance at being believed, and the noise would have buried the 15 findings
+that were true.
+
 ### `paths` may name files the work will CREATE
 
 A path that does not exist yet is **not an error** on an `open` item — plenty of work exists precisely to

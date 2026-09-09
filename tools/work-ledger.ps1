@@ -29,6 +29,15 @@
   PowerShell 7, zero module installs: JSON via ConvertFrom-Json, dates via ParseExact with
   the invariant culture, git via the git executable. Nothing else.
 
+  ## The drift baseline is a COMMIT, not a date
+
+  `git log --since=<date>` has day granularity, so a commit made earlier on the same day as
+  an item's `opened` reads as movement. The ledger therefore carries `baseCommit` (a full
+  40-char SHA) top-level, optionally overridden per item, and the check prefers
+  `git log <sha>..HEAD -- <path>`, which is exact. Every drift finding names the basis it
+  used, so an exact verdict is distinguishable from a coarse one without re-deriving it.
+  A `baseCommit` that does not resolve is an ERROR, never a silent fall back to the date.
+
   ## The rule that shapes every check
 
   A check that cannot be computed reports NOT-CHECKABLE and is never counted as clean.
@@ -164,6 +173,11 @@ work-ledger.ps1 -- validate a work ledger and render its queue.
     ... -Validate -Ledger docs/backlog.json | Select-String PROBABLY-SHIPPED
 
   A NOT-CHECKABLE finding is not a pass: it exits 1 like any other finding.
+
+  Drift findings NAME their baseline: an exact `commit range <sha>..HEAD` when the ledger
+  (or the item) sets `baseCommit`, otherwise `--since=<opened>`, which has DAY granularity
+  and will read a commit made earlier that same day as movement. A baseCommit that does not
+  resolve is an ERROR, never a silent fall back to the date.
   INFO is information, not a finding, and does not affect the exit code -- a `paths`
   entry the work has yet to create is reported there.
 '@ | Write-Output
@@ -281,6 +295,36 @@ function Get-DeclaredReleases {
     # `return , $out` -- the comma again. Without it an EMPTY list unrolls to $null and every
     # caller dies calling .Contains() on nothing, which is exactly what an untouched ledger does.
     return , $out
+}
+
+# THE DRIFT BASELINE IS A COMMIT, NOT A DATE. `git log --since=<date>` has DAY granularity,
+# so every commit made earlier on the same calendar day as `opened` reads as movement. On
+# the first morning this check could fire it produced 11 FALSE FINDINGS -- 4 PROBABLY-SHIPPED
+# and 7 PARTIALLY-MOVED -- ten of them tracing to one source file committed at ~09:00, hours
+# before the ledger existed that afternoon.
+#
+# Note the DIRECTION it failed in: these were false ALARMS, not false passes. It cried
+# shipped about open work, which is the less dangerous direction -- and it still had to be
+# fixed immediately, because the noise would have buried the 15 findings that were TRUE, and
+# a check that is wrong on its first real morning does not get believed a second time.
+#
+# So a `baseCommit` (full 40-char SHA) is preferred wherever one applies, and a SHA that does
+# not resolve is an ERROR rather than a silent fall back to the date -- falling back would
+# quietly restore the exact bug this field exists to fix.
+$script:ShaShape = [regex]'^[0-9a-fA-F]{40}$'
+
+function Get-ShaOrNull {
+    param($Value)
+    if ($null -eq $Value) { return $null }
+    $t = ([string]$Value).Trim()
+    if ($t.Length -eq 0) { return $null }
+    return $t
+}
+
+function Test-ShaShape {
+    param([string]$Sha)
+    if ([string]::IsNullOrWhiteSpace($Sha)) { return $false }
+    return $script:ShaShape.IsMatch($Sha)
 }
 
 function Get-AsArray {
@@ -405,6 +449,13 @@ function Invoke-SchemaChecks {
             Add-Finding -Severity 'WARN' -Class 'SCHEMA-TOP-FIELD-MISSING' -Id '-' -Message "ledger has no top-level '$top' field"
         }
     }
+    # baseCommit shape, top-level and per item. Whether it RESOLVES is checked in the drift
+    # check, the only place with a verified git work tree.
+    $topBase = Get-ShaOrNull (Get-Field $doc 'baseCommit')
+    if ($null -ne $topBase -and -not (Test-ShaShape $topBase)) {
+        Add-Finding -Severity 'ERROR' -Class 'SCHEMA-BASECOMMIT-SHAPE' -Id '-' -Message "top-level baseCommit '$topBase' is not a full 40-character SHA"
+    }
+
     $updated = Get-Field $doc 'updated'
     if ($null -ne $updated -and $null -eq (Parse-IsoDate ([string]$updated))) {
         Add-Finding -Severity 'ERROR' -Class 'SCHEMA-DATE-INVALID' -Id '-' -Message "top-level 'updated' is not an ISO date: '$updated'"
@@ -524,6 +575,11 @@ function Invoke-SchemaChecks {
                     }
                 }
             }
+        }
+
+        $itemBase = Get-ShaOrNull (Get-Field $it 'baseCommit')
+        if ($null -ne $itemBase -and -not (Test-ShaShape $itemBase)) {
+            Add-Finding -Severity 'ERROR' -Class 'SCHEMA-BASECOMMIT-SHAPE' -Id $id -Message "baseCommit '$itemBase' is not a full 40-character SHA"
         }
 
         # priority: a positive integer or null. Absent is legal and means unranked; there is
@@ -754,15 +810,52 @@ function Invoke-GitDriftCheck {
         return
     }
 
+    # Resolution order per item: item baseCommit -> top-level baseCommit -> opened.
+    $ledgerBase = Get-ShaOrNull (Get-Field $LedgerData.Document 'baseCommit')
+    $shaResolves = @{}   # cache: rev-parse runs once per distinct SHA, not once per item
+
     foreach ($it in $openItems) {
         $id = [string](Get-Field $it 'id')
 
-        $opened = Parse-IsoDate ([string](Get-Field $it 'opened'))
-        if ($null -eq $opened) {
-            Add-Finding -Severity 'NOT-CHECKABLE' -Class 'DRIFT-NO-BASELINE' -Id $id -Message 'opened is not an ISO date, so there is no baseline to measure commits from'
-            continue
+        $base = Get-ShaOrNull (Get-Field $it 'baseCommit')
+        $baseWhere = 'item baseCommit'
+        if ($null -eq $base) {
+            $base = $ledgerBase
+            $baseWhere = 'ledger baseCommit'
         }
-        $since = $opened.ToString('yyyy-MM-dd')
+
+        $basisArgs = $null
+        $basisText = ''
+
+        if ($null -ne $base) {
+            if (-not (Test-ShaShape $base)) {
+                # The shape is already an ERROR from the schema check. Do NOT fall back to
+                # the date: that is the bug baseCommit exists to fix.
+                Add-Finding -Severity 'NOT-CHECKABLE' -Class 'DRIFT-NO-BASELINE' -Id $id -Message "$baseWhere is not a full 40-character SHA, and falling back to --since=opened would restore the day-granularity false alarms"
+                continue
+            }
+            if (-not $shaResolves.ContainsKey($base)) {
+                & git -C $RepoRootPath rev-parse --verify --quiet "$base^{commit}" *> $null
+                $shaResolves[$base] = ($LASTEXITCODE -eq 0)
+            }
+            if (-not $shaResolves[$base]) {
+                Add-Finding -Severity 'ERROR' -Class 'BASECOMMIT-UNRESOLVED' -Id $id -Message "$baseWhere '$base' does not resolve to a commit in this repository"
+                Add-Finding -Severity 'NOT-CHECKABLE' -Class 'DRIFT-NO-BASELINE' -Id $id -Message "$baseWhere does not resolve, and falling back to --since=opened would restore the day-granularity false alarms"
+                continue
+            }
+            $basisArgs = @("$base..HEAD")
+            $basisText = "basis: commit range $($base.Substring(0, 12))..HEAD, exact, from the $baseWhere"
+        }
+        else {
+            $opened = Parse-IsoDate ([string](Get-Field $it 'opened'))
+            if ($null -eq $opened) {
+                Add-Finding -Severity 'NOT-CHECKABLE' -Class 'DRIFT-NO-BASELINE' -Id $id -Message 'no baseCommit applies and opened is not an ISO date, so there is no baseline to measure commits from'
+                continue
+            }
+            $since = $opened.ToString('yyyy-MM-dd')
+            $basisArgs = @("--since=$since")
+            $basisText = "basis: --since=$since, DAY GRANULARITY -- a commit made earlier that same day reads as movement; set baseCommit for an exact verdict"
+        }
 
         $paths = @(Get-AsArray (Get-Field $it 'paths') | ForEach-Object { [string]$_ } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
         if ($paths.Count -eq 0) {
@@ -780,7 +873,7 @@ function Invoke-GitDriftCheck {
             # tree is never evidence that work moved -- uncommitted work is invisible here
             # by design. Test-Path appears below solely to name the REASON a path could not
             # be judged, never to decide whether it moved.
-            $out = & git -C $RepoRootPath log --since=$since --format=%H -- $p 2>&1
+            $out = & git -C $RepoRootPath log $basisArgs --format=%H -- $p 2>&1
             if ($LASTEXITCODE -ne 0) {
                 $why = ((@($out) -join ' ').Trim())
                 Add-Finding -Severity 'NOT-CHECKABLE' -Class 'GIT-COMMAND-FAILED' -Id $id -Message "git log failed for path '$p': $why"
@@ -836,12 +929,12 @@ function Invoke-GitDriftCheck {
         # "every path has commits" is not established, so the verdict is downgraded rather
         # than asserted. Trading an honest gap for a false pass is the failure mode here.
         if ($moved.Count -eq $checkable -and $skipped -eq 0) {
-            Add-Finding -Severity 'WARN' -Class 'PROBABLY-SHIPPED' -Id $id -Message "state 'open' but all $checkable declared path(s) have commits since ${since} -- git disagrees with the ledger"
+            Add-Finding -Severity 'WARN' -Class 'PROBABLY-SHIPPED' -Id $id -Message "state 'open' but all $checkable declared path(s) have commits -- git disagrees with the ledger ($basisText)"
         }
         elseif ($moved.Count -gt 0) {
             $note = ''
             if ($skipped -gt 0) { $note = ", and $skipped path(s) could not be judged (so 'shipped' cannot be concluded)" }
-            Add-Finding -Severity 'WARN' -Class 'PARTIALLY-MOVED' -Id $id -Message "state 'open' and $($moved.Count) of $checkable judgeable path(s) have commits since ${since}${note} -- moved: $($moved -join ', ')"
+            Add-Finding -Severity 'WARN' -Class 'PARTIALLY-MOVED' -Id $id -Message "state 'open' and $($moved.Count) of $checkable judgeable path(s) have commits${note} -- moved: $($moved -join ', ') ($basisText)"
         }
     }
 }
