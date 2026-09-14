@@ -177,6 +177,26 @@ Follow these in **every** session, for **every** repo, without being reminded.
   reviewers, no assignee** — the API refuses to add the author as their own reviewer, so "assign it to
   me" is satisfied by the CLI being authenticated as you. Don't probe for credentials; test auth with an
   ordinary read.
+  - ⚠️ **`bb`'s output is a wide table that the tool result usually TRUNCATES, so a `create` or `merge`
+    can look like it produced nothing.** Get the id and state from
+    `bb pullrequest list --output json`, and **confirm a merge with `git fetch` + `git log origin/main`**
+    rather than believing `bb` — it caches (see the stale-reads note below).
+- 🔴 **App passwords are GONE — Bitbucket Cloud removed them on 2026-07-28.** New ones have been
+  uncreatable since 2025-09-09, existing ones were disabled 2026-06-09, and brownouts ran until removal.
+  Any guidance, script or memory that says "app password" is dead; **`bb profile create` needs an API
+  token.** Two token types exist and they authenticate differently:
+  - **Atlassian API token** — Basic auth. `bb profile create -n <name> -u <ACCOUNT EMAIL>
+    --password <api-token> --default --default-workspace <workspace>`. 🔴 **The user field must be the
+    account's EMAIL, not the Bitbucket username** — that single change breaks most migrations, and the
+    failure looks like a bad token rather than a bad username.
+  - **Repository / workspace Access token** — Bearer. `--access-token <token>`, no email. Scoped to one
+    repo, so it is the better choice for a project-specific profile. Needs `repository:write` and
+    `pullrequest:write`.
+  - Config lives at `%APPDATA%\bitbucket\config-cli.yml` (a `.env` in the working directory also wins).
+    **Never pass `--no-vault`** — it writes the credential to that file in cleartext.
+  - ⚠️ **Have the user create the profile in a SEPARATE terminal, not via `!`.** A `!` command and its
+    output are written verbatim into the session transcript on disk, so the token would persist there in
+    plaintext.
 - **Never push, force-push, or open PRs without explicit approval** — unless a project has a standing
   policy on file (see its `CLAUDE.md`).
 - **Never mention Claude or AI** in any commit, PR, tag, or ticket text.
@@ -382,6 +402,18 @@ terminal is unfocused and needs Remote Control for phone delivery.
 
 - **Clone over SSH, not HTTPS.** An HTTPS clone or `ls-remote` prompts for credentials and then *hangs
   with no error* in a non-interactive shell. This looks like a network problem and isn't.
+- 🔴 **`Host key verification failed` is NOT an authentication problem — READ THE ERROR.** Git wraps it in
+  *"Please make sure you have the correct access rights and the repository exists"*, which sends everyone
+  to their keys; the real cause is that the host is absent from `~/.ssh/known_hosts`, and it fires **before**
+  any key is offered. So adding, fixing or re-adding a key changes nothing, and you can burn several rounds
+  proving it. **Diagnose by reading the FIRST line of the error, not the last.** Two adjacent traps found
+  the same day: `IdentityFile` pointing at a key that does not exist on this machine (with
+  `IdentitiesOnly yes`, nothing else is tried), and a key that exists only in WSL's `~/.ssh` while git runs
+  Windows-side against `C:\Users\<user>\.ssh\`.
+  **Fix it verifiably rather than by trust-on-first-use:** `ssh-keyscan -t rsa,ecdsa,ed25519 <host>` into a
+  temp file, `ssh-keygen -lf` it, compare every fingerprint against the vendor's *published* list, and only
+  then append to `known_hosts` (backing the file up first). `ssh -T git@<host>` is the interactive
+  equivalent and is the user's call to accept.
 - **LocalDB is not part of a full SQL Server install.** It ships with Visual Studio and SQL Express, so
   a box with a full SQL Server can still have no `(localdb)\MSSQLLocalDB`. Check with `sqllocaldb info`
   — if the command isn't found, it isn't there. When a tracked connection string assumes LocalDB,
