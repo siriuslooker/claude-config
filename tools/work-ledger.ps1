@@ -567,6 +567,12 @@ function Invoke-DependencyChecks {
         if (-not [string]::IsNullOrWhiteSpace($id) -and -not $byId.ContainsKey($id)) { $byId[$id] = $it }
     }
 
+    # The declared release order, from the same helper the renderer uses -- one ordering, not
+    # two. Position in this list is the ONLY source of "earlier" and "later"; a release the
+    # array does not declare has no position, which the inversion check below reports rather
+    # than guesses at.
+    $declaredOrder = Get-DeclaredReleases -Doc $LedgerData.Document
+
     foreach ($it in $LedgerData.Items) {
         $id = [string](Get-Field $it 'id')
         foreach ($dep in (Get-AsArray (Get-Field $it 'dependsOn'))) {
@@ -582,6 +588,31 @@ function Invoke-DependencyChecks {
             $depState = [string](Get-Field $byId[$depId] 'state')
             if ($depState -eq 'landed' -or $depState -eq 'dropped') {
                 Add-Finding -Severity 'ERROR' -Class 'PHANTOM-BLOCKER' -Id $id -Message "dependsOn '$depId' is already '$depState'; this blocker has dissolved"
+            }
+
+            # Release inversion: this item ships in an EARLIER release than something it waits
+            # on, so the earlier release cannot ship at all. The FORWARD case -- a later release
+            # depending on an earlier one -- is correct sequencing and is deliberately silent,
+            # as is a dependency within one release or one with no release on either side. Not
+            # comparable is not a defect; only a comparison that comes out backwards is.
+            $myRelease = Get-ReleaseOrNull $it
+            $depRelease = Get-ReleaseOrNull $byId[$depId]
+            if ($null -ne $myRelease -and $null -ne $depRelease -and $myRelease -ne $depRelease) {
+                $myIdx = $declaredOrder.IndexOf($myRelease)
+                $depIdx = $declaredOrder.IndexOf($depRelease)
+                if ($myIdx -lt 0 -or $depIdx -lt 0) {
+                    # An undeclared release has no position, so "earlier" is not computable.
+                    # Say so rather than guessing a position or letting the pair pass as clean.
+                    $unplaced = if ($myIdx -lt 0 -and $depIdx -lt 0) {
+                        "neither its own release '$myRelease' nor '$depId' release '$depRelease' is"
+                    }
+                    elseif ($myIdx -lt 0) { "its own release '$myRelease' is not" }
+                    else { "'$depId' release '$depRelease' is not" }
+                    Add-Finding -Severity 'NOT-CHECKABLE' -Class 'RELEASE-INVERSION-UNORDERED' -Id $id -Message "dependsOn '$depId' crosses releases but $unplaced in the declared 'releases' order, so which ships first cannot be computed"
+                }
+                elseif ($depIdx -gt $myIdx) {
+                    Add-Finding -Severity 'WARN' -Class 'RELEASE-INVERSION' -Id $id -Message "release '$myRelease' depends on $depId which is scheduled for '$depRelease' -- the earlier release cannot ship without it"
+                }
             }
         }
     }
