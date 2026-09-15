@@ -346,6 +346,49 @@ defaults to 300s. Both must keep working; do not conflate them.
 - **Marker dir `~/.claude/.bg-tasks/`** — excluded by the allowlist `.gitignore` (which ignores `*`), so
   **do not add an entry for it.**
 
+### Working over SSH — `claude --bg`, NOT a terminal multiplexer
+
+**Verified 2026-09-15: a background session survives an SSH disconnect on Windows.** Start it, drop the
+connection however it drops, reconnect, attach. Work in flight keeps running across the gap — tested with
+a task producing continuous output, and the output had advanced past the disconnect point on return.
+
+```
+claude --bg "<prompt>"     # returns immediately, prints a short id
+claude agents              # list background sessions
+claude logs <id>           # recent output, without attaching
+claude attach <id>         # open it in this terminal
+claude stop <id> / rm <id> # end it / remove it
+```
+
+🔴 **This replaces running Claude Code inside tmux/screen for remote work, and the replacement is strictly
+better — not merely equivalent.** The reason to use a multiplexer was that Windows OpenSSH kills the
+`pwsh` process tree on disconnect, so the multiplexer existed to keep a *terminal* alive in order to keep
+a *process* alive. A background session is detached from any terminal to begin with; there is no pty to
+preserve, and you attach a view to a session that was never tied to one.
+
+⭐ **The second benefit is the one nobody predicts: clickable file paths come back.** Claude Code bundles
+the `supports-hyperlinks` check, which **returns false whenever it detects a multiplexer** — it cannot see
+what is outside one, so it fails safe and never emits the OSC 8 sequence at all. Under tmux, paths go dead
+because *nothing is sent*, not because anything strips them. So no multiplexer means no suppression.
+
+⚠️ **Two traps this cost a session to learn, both worth keeping:**
+
+- **The layer was misdiagnosed for an hour.** The symptom looks exactly like the multiplexer eating escape
+  sequences, and every remedy that follows from that reading — a newer build, a config flag, migrating to a
+  different multiplexer — is aimed at the wrong layer and would have reproduced the problem. `FORCE_HYPERLINK`
+  is the library's documented override if you ever genuinely need emission forced; it is the wrong tool here.
+- 🔴 **`strings` on a WinGet-installed binary reads the SYMLINK, not the executable.** `winget` puts a small
+  link in `WinGet\Links\` pointing into `WinGet\Packages\...`. Scanning the link yields nothing and looks
+  exactly like "the feature is not compiled in." **Resolve the link before scanning any binary**, and treat
+  absence-of-strings as weak evidence regardless — a settable option whose name does not appear in the binary
+  is entirely possible.
+
+**A multiplexer is still fine to keep installed as a fallback**, and some accept options they silently do not
+implement — so **an option reading back cleanly is never evidence it does anything.** Verify behaviour, not
+configuration state.
+
+---
+
 ## Notifications
 
 ### HARD RULE — every stop notifies if Brian is away (automatic; hooks own it)
