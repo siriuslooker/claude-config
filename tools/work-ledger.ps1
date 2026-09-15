@@ -22,6 +22,10 @@
         Not one byte outside the markers is touched. Missing markers is an error, never a
         guess about where the block belongs.
 
+        Where items carry a `release`, the queue is grouped by it in the order the top-level
+        `releases` array declares, each group keeping the per-kind partition; undeclared
+        releases render after the declared ones and items with none render as Unscheduled.
+
   PowerShell 7, zero module installs: JSON via ConvertFrom-Json, dates via ParseExact with
   the invariant culture, git via the git executable. Nothing else.
 
@@ -148,6 +152,9 @@ work-ledger.ps1 -- validate a work ledger and render its queue.
   Render:
     work-ledger.ps1 -Render -Ledger <backlog.json> -Into <markdown file>
 
+  An item's optional `release` groups it under the top-level `releases` order; items without
+  one render last as Unscheduled, and a release no `releases` entry declares is a WARN.
+
   Exit codes (validate):  0 clean   1 findings   2 ledger unreadable/malformed
   Exit codes (render):    0 written  2 ledger unreadable, markers missing/ambiguous
 
@@ -246,6 +253,34 @@ function Get-PriorityOrNull {
     if ("$n" -ne $text.Trim()) { return $null }   # rejects 1.0, 01, " 1 "
     if ($n -lt 1) { return $null }
     return $n
+}
+
+# `release` groups the queue into shipping trains. Like `priority` it is set by a human and
+# never derived; unlike an enum its permitted values are per-project and come from the
+# top-level `releases` array. Absent, null or whitespace means unscheduled -- never last.
+function Get-ReleaseOrNull {
+    param($Obj)
+    if (-not (Test-HasField $Obj 'release')) { return $null }
+    $raw = Get-Field $Obj 'release'
+    if ($null -eq $raw) { return $null }
+    $text = ([string]$raw).Trim()
+    if ($text.Length -eq 0) { return $null }
+    return $text
+}
+
+# The declared release order, top-level and human-set. Only well-formed string entries count;
+# a malformed entry is the schema check's business, not this one's.
+function Get-DeclaredReleases {
+    param($Doc)
+    $out = [System.Collections.Generic.List[string]]::new()
+    foreach ($r in (Get-AsArray (Get-Field $Doc 'releases'))) {
+        if ($null -eq $r -or $r -isnot [string]) { continue }
+        $t = $r.Trim()
+        if ($t.Length -gt 0 -and -not $out.Contains($t)) { $out.Add($t) }
+    }
+    # `return , $out` -- the comma again. Without it an EMPTY list unrolls to $null and every
+    # caller dies calling .Contains() on nothing, which is exactly what an untouched ledger does.
+    return , $out
 }
 
 function Get-AsArray {
@@ -391,6 +426,23 @@ function Invoke-SchemaChecks {
         }
     }
 
+    # releases: optional, an array of non-empty strings, and the ONLY place a release name is
+    # declared. It is not an enum in $script:Enums because its values are per-project.
+    if (Test-HasField $doc 'releases') {
+        $rv = Get-Field $doc 'releases'
+        if ($null -eq $rv -or $rv -is [string] -or -not ($rv -is [System.Collections.IEnumerable])) {
+            Add-Finding -Severity 'ERROR' -Class 'SCHEMA-RELEASES-SHAPE' -Id '-' -Message "top-level 'releases' must be an array of non-empty strings (omit it when the project has no release order)"
+        }
+        else {
+            foreach ($e in @($rv)) {
+                if ($null -eq $e -or $e -isnot [string] -or [string]::IsNullOrWhiteSpace($e)) {
+                    Add-Finding -Severity 'ERROR' -Class 'SCHEMA-RELEASES-SHAPE' -Id '-' -Message "top-level 'releases' contains a non-string or empty entry"
+                }
+            }
+        }
+    }
+    $declaredReleases = Get-DeclaredReleases -Doc $doc
+
     # An id in BOTH retired and items is a contradiction, not a harmless duplicate: the
     # ledger would be claiming the same work is live and closed at once.
     $itemIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
@@ -480,6 +532,23 @@ function Invoke-SchemaChecks {
             $praw = Get-Field $it 'priority'
             if ($null -ne $praw -and $null -eq (Get-PriorityOrNull $it)) {
                 Add-Finding -Severity 'ERROR' -Class 'SCHEMA-PRIORITY-INVALID' -Id $id -Message "priority '$praw' is not a positive integer or null (1 = highest; omit or null when unranked)"
+            }
+        }
+
+        # release: optional, but when present it must name a DECLARED release. An undeclared one
+        # has no position in the order, so where it renders is arbitrary -- the same shape of
+        # drift as a dependsOn nobody can resolve.
+        if (Test-HasField $it 'release') {
+            $rrawObj = Get-Field $it 'release'
+            if ($null -eq $rrawObj -or $rrawObj -isnot [string] -or [string]::IsNullOrWhiteSpace($rrawObj)) {
+                Add-Finding -Severity 'ERROR' -Class 'SCHEMA-RELEASE-SHAPE' -Id $id -Message "release '$rrawObj' must be a non-empty string naming one of the top-level 'releases' (omit it when unscheduled)"
+            }
+            else {
+                $rname = $rrawObj.Trim()
+                if (-not $declaredReleases.Contains($rname)) {
+                    $declaredText = if ($declaredReleases.Count -eq 0) { '(none declared)' } else { ($declaredReleases -join ', ') }
+                    Add-Finding -Severity 'WARN' -Class 'RELEASE-UNDECLARED' -Id $id -Message "release '$rname' is not in the top-level 'releases': $declaredText -- it has no position in the order"
+                }
             }
         }
 
@@ -779,14 +848,14 @@ function Invoke-CitationChecks {
     # Known symbols: ids, ALIASES, and jira keys. Aliases matter as much as ids -- a
     # citation matching an alias is a legitimate old name, not an orphan. Getting this
     # wrong floods the first run with false positives and the tool gets switched off.
+    # A jira key is known but is NOT state-in-prose scannable -- see the comment below.
     $known = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
     $idShapedKnown = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
     $prefixes = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
 
     foreach ($it in $LedgerData.Items) {
         $syms = @([string](Get-Field $it 'id')) +
-        @(Get-AsArray (Get-Field $it 'aliases') | ForEach-Object { [string]$_ }) +
-        @([string](Get-Field $it 'jira'))
+        @(Get-AsArray (Get-Field $it 'aliases') | ForEach-Object { [string]$_ })
         foreach ($s in $syms) {
             if ([string]::IsNullOrWhiteSpace($s)) { continue }
             $t = $s.Trim()
@@ -795,6 +864,21 @@ function Invoke-CitationChecks {
                 [void]$idShapedKnown.Add($t)
                 [void]$prefixes.Add((($t -split '-', 2)[0]))
             }
+        }
+
+        # 🔴 A `jira` key is a KNOWN SYMBOL but NEVER a state-in-prose symbol, and conflating
+        # the two makes this tool claim state it does not own. Rule 1 governs *ledger* state;
+        # a Jira ticket's status genuinely lives in Jira, so prose is entitled to state it.
+        # Observed 2026-09-15: one item carrying a `jira` key turned a spec header reading
+        # `**Status:** specification ... **Ticket:** <that key>` into a finding -- a DOCUMENT's own
+        # status, beside a TICKET key, in a namespace the same ledger lists under
+        # ignoredNamespaces. It still feeds $known (citing a ticket must not read as an orphan)
+        # and $prefixes (that namespace is one the ledger really does use), never $idShapedKnown.
+        $jira = [string](Get-Field $it 'jira')
+        if (-not [string]::IsNullOrWhiteSpace($jira)) {
+            $jt = $jira.Trim()
+            [void]$known.Add($jt)
+            if (Test-IdShaped $jt) { [void]$prefixes.Add((($jt -split '-', 2)[0])) }
         }
     }
 
@@ -881,6 +965,17 @@ function Invoke-CitationChecks {
 
     # --- state in prose
     if ($NoProseCheck) { return }
+
+    # `ignoredNamespaces` is AUTHORITATIVE here, whatever put a symbol in the known set: a
+    # prefix the ledger declares is never a ledger item cannot carry ledger state either, so
+    # it cannot be a second home for it. Applied after the set is built rather than at each
+    # insertion point, so no future source of symbols can route around it.
+    if ($ignoredNs.Count -gt 0) {
+        foreach ($t in @($idShapedKnown)) {
+            if ($ignoredNs.Contains((($t -split '-', 2)[0]))) { [void]$idShapedKnown.Remove($t) }
+        }
+    }
+
     if ($idShapedKnown.Count -eq 0) {
         Add-Finding -Severity 'NOT-CHECKABLE' -Class 'PROSE-NO-SYMBOLS' -Id '-' -Message 'no id-shaped symbols in the ledger, so the state-in-prose check could not run'
         return
@@ -989,7 +1084,74 @@ function Build-QueueBlock {
         Add-QueueTable -Lines $lines -Rows $ranked -IncludePriority
     }
 
-    $extraKinds = @($unranked | ForEach-Object { [string](Get-Field $_ 'kind') } |
+    # No item carries a release: render exactly as before, one kind partition over the whole
+    # queue. Byte-identical output for every ledger that has not adopted releases.
+    $releasedCount = @($queue | Where-Object { $null -ne (Get-ReleaseOrNull $_) }).Count
+    if ($releasedCount -eq 0) {
+        Add-KindSections -Lines $lines -Rows $unranked -First ([ref]$first)
+        return $lines
+    }
+
+    # Release order is the human's, from the top-level `releases`. A release present on items
+    # but never declared renders after the declared ones rather than being dropped -- it is
+    # visible, and the validator reports it. Unscheduled items render last, never omitted.
+    $declared = Get-DeclaredReleases -Doc $LedgerData.Document
+    $present = [System.Collections.Generic.List[string]]::new()
+    foreach ($q in $queue) {
+        $r = Get-ReleaseOrNull $q
+        if ($null -ne $r -and -not $present.Contains($r)) { $present.Add($r) }
+    }
+    $undeclared = [System.Collections.Generic.List[string]]::new()
+    foreach ($p in $present) { if (-not $declared.Contains($p)) { $undeclared.Add($p) } }
+    $undeclared.Sort([System.StringComparer]::Ordinal)
+
+    # List[object], NOT List[string]: $null is the unscheduled group's own name, and
+    # List[string].Add($null) stores an EMPTY STRING instead, which matches no item and
+    # silently drops every unscheduled row -- the one outcome this must never have.
+    $groups = [System.Collections.Generic.List[object]]::new()
+    foreach ($d in $declared) { if ($present.Contains($d)) { $groups.Add($d) } }
+    foreach ($u in $undeclared) { $groups.Add($u) }
+    $groups.Add($null)   # unscheduled
+
+    foreach ($g in $groups) {
+        $inGroup = @($queue | Where-Object { (Get-ReleaseOrNull $_) -eq $g })
+        if ($inGroup.Count -eq 0) { continue }
+        $rows = @($unranked | Where-Object { (Get-ReleaseOrNull $_) -eq $g })
+
+        if (-not $first) { $lines.Add('') }
+        $first = $false
+
+        $label = if ($null -eq $g) { 'Unscheduled' } else { "Release $g" }
+        $noun = if ($inGroup.Count -eq 1) { 'item' } else { 'items' }
+        # The count is every queue item in the release. Ranked items are listed above rather
+        # than here, so say how many, instead of leaving the heading contradicting the rows.
+        $lifted = $inGroup.Count - $rows.Count
+        $note = ''
+        if ($lifted -gt 0) { $note = " ($lifted in Ranked above)" }
+        $lines.Add("## $label - $($inGroup.Count) $noun$note")
+        $lines.Add('')
+
+        if ($rows.Count -eq 0) {
+            $lines.Add('_Every item here is ranked above._')
+            continue
+        }
+
+        $sectionFirst = $true
+        Add-KindSections -Lines $lines -Rows $rows -First ([ref]$sectionFirst)
+    }
+    return $lines
+}
+
+# The per-kind partition: code first and alone, then the rest, each table severity descending
+# then size ascending. Factored out so a release block can nest one without reimplementing it.
+function Add-KindSections {
+    param(
+        [System.Collections.Generic.List[string]]$Lines,
+        $Rows,
+        [ref]$First
+    )
+
+    $extraKinds = @($Rows | ForEach-Object { [string](Get-Field $_ 'kind') } |
         Where-Object { $script:KindOrder -notcontains $_ } | Sort-Object -Unique)
     $kinds = @($script:KindOrder) + $extraKinds
 
@@ -999,26 +1161,25 @@ function Build-QueueBlock {
     }
 
     foreach ($kind in $kinds) {
-        $rows = @($unranked | Where-Object { [string](Get-Field $_ 'kind') -eq $kind })
-        if ($rows.Count -eq 0) { continue }
+        $kindRows = @($Rows | Where-Object { [string](Get-Field $_ 'kind') -eq $kind })
+        if ($kindRows.Count -eq 0) { continue }
 
         # severity descending, then size ascending, so the cheap dangerous things surface
         # first. id last, purely to make the order deterministic.
-        $rows = @($rows | Sort-Object `
+        $kindRows = @($kindRows | Sort-Object `
             @{ Expression = { $v = $script:SevOrder[[string](Get-Field $_ 'severity')]; if ($null -eq $v) { 99 } else { $v } } }, `
             @{ Expression = { $v = $script:SizeOrder[[string](Get-Field $_ 'size')]; if ($null -eq $v) { 99 } else { $v } } }, `
             @{ Expression = { [string](Get-Field $_ 'id') } })
 
-        if (-not $first) { $lines.Add('') }
-        $first = $false
+        if (-not $First.Value) { $Lines.Add('') }
+        $First.Value = $false
 
         $h = $kind
         if ($headings.ContainsKey($kind)) { $h = $headings[$kind] }
-        $lines.Add("### $h")
-        $lines.Add('')
-        Add-QueueTable -Lines $lines -Rows $rows
+        $Lines.Add("### $h")
+        $Lines.Add('')
+        Add-QueueTable -Lines $Lines -Rows $kindRows
     }
-    return $lines
 }
 
 function Add-QueueTable {

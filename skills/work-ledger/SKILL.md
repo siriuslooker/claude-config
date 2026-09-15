@@ -63,6 +63,7 @@ PowerShell 7 parses JSON natively while YAML needs a module.
   "schema": 1,
   "project": "<short project name>",
   "updated": "<ISO date>",
+  "releases": ["v4", "v4.x", "v5"],
   "ignoredNamespaces": ["WO"],
   "retired": ["MGMT-1", "MGMT-2", "SESS-8"],
   "items": [ ... ]
@@ -120,6 +121,7 @@ gets switched off, and every check that follows it inherits that distrust.
 | `size` | ✅ | `one-line` · `hour` · `half-day` · `day` · `phase` · `unknown` |
 | `severity` | ✅ | `data-loss` · `security` · `correctness` · `ux` · `debt` · `none` |
 | `priority` | — | Integer, 1 = highest. **Explicit human ordering.** Omit or `null` when unranked. |
+| `release` | — | Which release this ships in, e.g. `v4`. Values come from the top-level `releases` array, **not** from a fixed enum. Omit when unscheduled. |
 | `dependsOn` | ✅ | Ledger ids only. **Machine-checkable.** `[]` when none. |
 | `waitingOn` | ✅ | `null`, or `{"who": "...", "what": "...", "since": "<ISO date>"}`. **A human or external gate. Never checkable.** |
 | `paths` | ✅ | Files the work will touch. **Drives the drift check.** `[]` if genuinely unknowable. |
@@ -128,6 +130,27 @@ gets switched off, and every check that follows it inherits that distrust.
 | `detail` | ✅ | Pointer to the prose that explains it. **Prose holds detail; the ledger holds state.** |
 | `jira` | — | Outward ticket key. |
 | `opened` | ✅ | ISO date. The baseline the drift check measures from. |
+
+### `release` and `releases` — the split has to be a field, or it is a sentence
+
+A project that ships in more than one cut needs to record *which cut*. The failure mode if it does not is
+the one this whole file exists to prevent: the split gets written as a paragraph, the paragraph is copied
+into a phase plan and a status doc, and within two sessions they disagree about which items are in.
+
+- **`releases`** — a top-level array declaring the order **once**, e.g. `["v4", "v4.x", "v5"]`. Human-set,
+  like `priority`. ⚠️ **Never infer the order from where items appear in the file** — that is the ordinal
+  trap again, and it is rejected for the same reason ids are never numbers.
+- **`release`** — the per-item string. Optional. It is deliberately **not** in the validator's enum table,
+  because permitted values are per-project; the check is instead that an item's value appears in
+  `releases` (`RELEASE-UNDECLARED`, a warning).
+
+Two behaviours that are load-bearing and should not be "tidied":
+
+- An item naming an **undeclared** release still renders, under its own heading after the declared ones.
+  Visible beats dropped — an item that disappears from the queue because its release was misspelled is
+  precisely the silent loss the ledger replaced.
+- An item with **no** `release` renders under `Unscheduled`, and a ledger where **no** item has one renders
+  byte-identically to a release-unaware ledger. Most projects never split, and they must pay nothing.
 
 ### ⚠️ `id` must never be positional, and `aliases` is not optional bookkeeping
 
