@@ -245,6 +245,15 @@ maps to no real incident is speculative and belongs out.
 | **Decided but not built** — `decidedIn` set, `state: open` | the class that reached a deploy three times | the recurring "recorded is not tracked" failure |
 | **State in prose** — a status assertion beside an id outside the ledger | the duplication returning | median 4 homes per item |
 | **Stale `waitingOn`** — `since` older than 30 days | an unverifiable gate nobody revisited | the 18-day buried blocker |
+| **Release inversion** — `dependsOn` names an item in a LATER `release` | an earlier release that cannot ship | ⚠️ added on judgement, not incident — see below |
+
+⚠️ **One check was added before it had failed, and that is worth flagging rather than hiding.** Every other
+row above traces to a measured incident. **Release inversion** does not: it was added the day a project
+first split its backlog across releases, on the reasoning that the split is precisely what makes the defect
+possible, and that its first occurrence would surface at release time — when an earlier release turns out to
+wait on work deliberately scheduled after it. Forward dependencies are correct and stay silent, so the check
+starts quiet on a healthy ledger. **If it never fires in a year of real splits, delete it**; the doctrine is
+not decoration.
 
 **Exit codes:** `0` clean · `1` findings · `2` the ledger itself is unreadable. Findings print one per
 line, machine-greppable, severity-first.
