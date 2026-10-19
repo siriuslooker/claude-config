@@ -65,6 +65,16 @@ This is not a style preference. It was asked for directly, twice.
      auth required vs. public, a malformed body, a not-found id, and any guard the change claims to
      add (verify it actually blocks, don't assume).
    - **Neither available** → report `NO_DRIVER` rather than pretending to have tested a UI.
+   - **The UI needs a login** → sign the Playwright MCP browser in with **`tools/qa-login.js`**, never by
+     reading `credentials.json` yourself; the auto-mode check blocks that, and rightly. First open the
+     browser (`browser_navigate` to the login page), then run, with the Bash tool and **no `cd … &&`
+     prefix**:
+     `node ~/.claude/tools/qa-login.js --label "<credentials label>" --url <login URL> [--check-url <URL that needs that role>]`
+     It prints only `ok host=… label=…` and copies the session cookies into the MCP browser. It needs
+     the user-level allow rule `Bash(node ~/.claude/tools/qa-login.js:*)`. Prefer a **dedicated QA
+     account** label over a person's own login. Re-run it if the session expires or the browser
+     restarts. No suitable label, or the rule is missing → report `BLOCKED` with what's needed. Don't
+     work around it.
 5. **Exercise it.** Walk the user-facing flows the change touches. For each step record what you
    did and what happened. Check the browser console and the app log
    (`.claude/stack-ops/app.log`) for errors that don't surface in the UI — those are real defects
