@@ -218,6 +218,14 @@ Follow these in **every** session, for **every** repo, without being reminded.
 - **`.gitignore` patterns must never differ from a real source path only by case.** Git on Windows is
   case-insensitive, so `src/App/storage/` silently swallows the source folder `src/App/Storage/` — files
   are lost, not merely untracked. This cost a broken `main` once.
+- **One database migration per effort, consolidated before the PR.** However many migrations an effort
+  accumulates while it's being built (EF migrations plus any hand-run UP/DOWN SQL scripts), **consolidate
+  them into a single migration, timestamped with the current date, before the PR is opened.** Standing rule
+  from the user, 2026-10-21: a feature whose migrations span months turns its PR and every hand-run deploy
+  into a mess. **Never fold in a migration that has already been deployed** to any environment: check
+  the base branch, other branches and tags, and the deploy record first, and leave deployed ones as they
+  are. The consolidated migration's model snapshot is the final one, which is the last old migration's.
+  Developer databases that ran the old migrations need their migration-history rows swapped for the new id.
 
 ### SVN
 
