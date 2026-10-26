@@ -97,6 +97,13 @@ recurring problem (2026-10-26).** So, before the MSBuild step:
 Scope it to the projects being built or launched; a whole-solution build runs all bound projects. If Node/npm is
 absent, report `TOOLCHAIN_MISSING` for the assets stage rather than skipping silently.
 
+⚠️ **`node_modules` inside a web project breaks view compilation.** Once the step above has installed packages,
+`MvcBuildViews` / `aspnet_compiler` walks the project directory, finds C/C++ sources shipped inside some npm packages
+(e.g. `@parcel/watcher`), and fails with an `ASPCONFIG` error naming `CppCodeProvider` — a toolchain artefact, not a
+view error. When asked to compile views, compile them from a copy of the project **without** `node_modules` (e.g.
+`robocopy <proj> <tmp> /E /XD node_modules obj` then `aspnet_compiler -v / -p <tmp> <out>`), and say so in Notes. A
+normal VS build doesn't compile views, which is why developers rarely see this.
+
 ## Environment — strip a stray Visual Studio 18 toolchain
 
 ⚠️ Agent shells on some machines inherit `VisualStudioVersion=18.0` (and related variables) from a VS 18
