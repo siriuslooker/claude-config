@@ -66,6 +66,44 @@ package restored is the failure mode this note exists to catch.
 - Restore separately and report its outcome separately. A restore failure is `FAIL` with
   `stage: restore` — **not** a compile failure, and not something to retry by building anyway.
 
+## Front-end assets — run the Task Runner bindings MSBuild ignores (MANDATORY for web projects)
+
+🔴 **A Visual Studio build runs gulp/grunt/npm tasks that a command-line MSBuild never runs.** Web projects bind
+them through **Task Runner Explorer**, declared as a comment on the **first line** of the task file:
+
+```
+/// <binding BeforeBuild='compile' />          (gulpfile.js)
+/// <binding AfterBuild='build' Clean='clean' />
+```
+
+VS executes those on every build; MSBuild knows nothing about them. Skip this and the build "succeeds" while the
+site serves **stale or missing CSS/JS** (SASS never compiled, bundles never revisioned) — the page renders with
+broken styles, which looks like a front-end bug and is a build-step omission. **Reported by the user as a
+recurring problem (2026-10-26).** So, before the MSBuild step:
+
+1. **Find bindings** — every `gulpfile.js` / `Gruntfile.js` (and `package.json` `"-vs-binding"` blocks) in the
+   solution's web projects, excluding `node_modules`. Read the binding comment on line 1.
+2. For each project with a `BeforeBuild` (or `ProjectOpened`) binding, **in that project's directory**:
+   - `npm ci` when a `package-lock.json` is present (else `npm install`), **only if `node_modules` is missing or
+     older than the lockfile**. Use `npm.cmd`/`npx.cmd` (on PowerShell, `npm` resolves to `npm.ps1`); Node may live
+     outside `C:\` (check `Get-Command node` and the machine notes).
+   - `npx --no-install gulp <task>` (or `grunt <task>`) for each task named in `BeforeBuild`, in the order listed.
+   - Run `AfterBuild` tasks **after** the MSBuild step, the same way.
+3. Report each project's tasks, exit codes and durations in the payload (`### Front-end`). A failed task is
+   `FAIL`, `stage: assets` — not a compile pass with a footnote.
+4. These tasks often rewrite **tracked** files (e.g. `rev-manifest.json` with hashed asset names). Report that
+   they changed; **do not commit or revert them** — the caller decides.
+
+Scope it to the projects being built or launched; a whole-solution build runs all bound projects. If Node/npm is
+absent, report `TOOLCHAIN_MISSING` for the assets stage rather than skipping silently.
+
+## Environment — strip a stray Visual Studio 18 toolchain
+
+⚠️ Agent shells on some machines inherit `VisualStudioVersion=18.0` (and related variables) from a VS 18
+BuildTools install. With them set, **every web project fails with `MSB4226`** even under the correct VS 2022
+MSBuild. Remove `VisualStudioVersion` (and any `VSINSTALLDIR`/`VS180COMNTOOLS`-style variables pointing at
+`\18\`) from the build process environment before invoking MSBuild or nuget, and say so in Notes.
+
 ## Build
 
 Prefer the solution over individual projects — it catches cross-project breakage.
@@ -142,6 +180,7 @@ Never report a pass you did not observe, and never smooth an absence into one.
 - **Entry:** <path>  •  **Configuration:** <Debug|Release>
 - **MSBuild:** <version> at <resolved path>  •  **Resolved by:** vswhere
 - **Restore:** <OK | FAIL | skipped>  •  **Elapsed:** <seconds>
+- **Front-end assets:** <per project: tasks run + exit, or "no bindings found">  •  **Tracked files changed by them:** <list or none>
 - **Log:** <path, if written>
 - **Errors:** <count>  •  **Warnings (this repo):** <count>
 - **Projects built:** <n of m>

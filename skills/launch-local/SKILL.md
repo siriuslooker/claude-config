@@ -32,6 +32,26 @@ Without a manifest, fall back to detection:
 | netcore | `dotnet run --project <proj> --launch-profile http` | read `Properties/launchSettings.json` |
 | node (dev) | `<pm> run dev` | read the Vite/Next default from output (`5173`, `3000`) |
 | node (prod bundle) | `<pm> run build` then `<pm> run preview` | `4173` |
+| netfx web (MVC/WebForms) | `"C:\Program Files\IIS Express\iisexpress.exe" /path:<project dir> /port:<port> /systray:false` | `<IISUrl>` in the `.csproj` |
+
+### netfx web projects — before launching
+
+- **Run the front-end Task Runner bindings first** (see `compile-netfx` → "Front-end assets"): a `gulpfile.js` /
+  `Gruntfile.js` whose line 1 is `/// <binding BeforeBuild='…' />` must be run (`npm ci` + `npx --no-install gulp
+  <task>`) or the site serves stale/missing CSS and JS. Visual Studio does this on build; an MSBuild build and an
+  IIS Express launch do not. Launching a site whose bundles were never built gives the user broken styles — this
+  has happened repeatedly. If the app reads an asset manifest (e.g. `rev-manifest.json`) at startup, restart it
+  after the tasks run.
+- **Build first** (`compile-netfx`); IIS Express serves `bin/` as it is.
+- **Config overrides go in the process environment**, never in tracked files: set them in the launching shell
+  before `Start-Process`, then remove them (children inherit the snapshot). Read secrets from the user's
+  environment (`[Environment]::GetEnvironmentVariable(name,'User')`) and never print them.
+- **EF6 "pending changes and automatic migration is disabled"** at startup usually means the local database ran a
+  migration from **another branch/worktree** that this branch lacks — compare `__MigrationHistory` with the
+  branch's `Migrations/`. Don't roll back a shared dev database (it breaks the other worktree): run against a
+  restored copy with the extra history row removed (only if that migration's schema change is harmless, e.g. a
+  nullable column), via a connection-string environment override, and tell the user.
+- Health: an authenticated MVC site answers `302` to its login page — that is `OK`, not a failure.
 
 Read the actual port from `launchSettings.json` / `vite.config.*` rather than assuming. If the port
 is already in use, report `PORT_IN_USE` with what holds it — do not silently pick another port; the
