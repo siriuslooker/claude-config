@@ -65,7 +65,8 @@ session.
 
 Give a short summary of the ledger items you changed (by id), the validator's result, what you synced
 in STATUS narration, and anything left for `/end-session`. Don't commit unless asked. Remind the user
-this was a checkpoint, not a close-out.
+this was a checkpoint, not a close-out. **End on a statement, not a question** — like `/end-session`,
+this is often followed by `/exit` or `/clear`, and a trailing question blocks that.
 
 > Use today's date for any stamp — including the ledger's `updated` field. Preserve STATUS's
 > established format and voice.

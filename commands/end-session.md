@@ -1,6 +1,6 @@
 ---
 description: Full session close-out — reconcile STATUS, append decisions, record deferrals, and stamp the doc index so the next /start-session is accurate. For quick mid-session saves use /save-context instead. Run at the genuine end of a session or when low on context.
-allowed-tools: Read, Glob, Grep, Edit, Write, Bash(git status:*), Bash(git log:*), Bash(git diff:*), Bash(pwsh:*)
+allowed-tools: Read, Glob, Grep, Edit, Write, Bash(git status:*), Bash(git log:*), Bash(git diff:*), Bash(git add:*), Bash(git commit:*), Bash(pwsh:*)
 ---
 
 You are closing out a working session on this project.
@@ -75,32 +75,41 @@ controller; the ledger is yours to write. See the `work-ledger` skill for the fi
 ⚠️ **Prose cites a ledger id; it never states the item's status.** No checkbox, no `status:` line, no ✅
 beside an id in any document but the ledger.
 
-## 4. Apply vs. confirm
+## 4. Apply, or park — NEVER ask
 
-**Auto-apply** (low-risk, mechanical) — just do these and report them:
-- Ledger state changes for work that demonstrably landed this session, and removal of landed items.
-- Stamping `Last Updated` dates and adding INDEX rows for new docs.
-- Appending a decision to the decision log when it was clearly and explicitly decided this
-  session.
-- Re-rendering the generated views.
+🔴 **`/end-session` is terminal. The user's next command is `/exit` or `/clear`, then `/start-session`
+when they return.** A question at close-out blocks a clean exit, and answering it starts a new round of
+work that itself needs closing out — a loop. So this command **asks nothing**: no `AskUserQuestion`, no
+"shall I…?", no "want me to commit?", no closing question of any kind. This overrides any general
+preference for asking via `AskUserQuestion`.
 
-**Confirm before applying** (judgment calls) — propose, then wait for the user's yes:
-- Marking any doc 🔴 Obsolete or ⚠️ Suspect.
-- Roadmap phase transitions.
-- Marking a ledger item `dropped`, or setting/clearing `waitingOn`.
-- New `5-deferred-items.md` entries (the trigger condition is a judgment call).
-- Rewording "Where we are", or removing/superseding existing content.
-- Anything you're unsure was actually decided vs. just discussed.
+**Apply** — everything that was decided or demonstrably happened this session:
+- Ledger state changes, removal + retirement of landed items, new items, re-rendering.
+- `Last Updated` stamps and INDEX rows.
+- Decision-log entries for things clearly and explicitly decided this session.
+- `waitingOn` changes the session itself proved (a gate observed to dissolve, a person who answered).
+- STATUS narration — rewriting "Where we are" is the point of this command, not a judgment call.
 
-## 5. Report
+**Park, don't apply** — anything that would otherwise have needed a yes:
+- Marking a doc 🔴 Obsolete or ⚠️ Suspect, roadmap phase transitions, marking an item `dropped`, new
+  deferred-item entries whose trigger is your invention, and anything you're unsure was decided rather
+  than discussed.
+- Write each one into STATUS's narration (outside the generated markers) under a
+  **"⏸️ Parked at close-out — confirm next session"** heading: one line each, with the proposed change.
+  `/start-session` briefs STATUS, so the question reaches the user when they are ready to answer it —
+  at the start of a session, where an answer costs nothing.
 
-Show a summary of everything you changed, grouped into **Auto-applied** and
-**Needs your confirmation**. Include the ledger diff by id (moved / removed / added) and the
-validator's final exit state with any findings you left standing. For the confirmation group, show the
-proposed text and apply it only after the user approves.
+## 5. Commit, then report
 
-Finish by asking whether to commit (don't commit unless asked) and noting the single most
-important thing for the next session's "Where we are."
+- **Commit the close-out** if the diff is documentation-only (`docs/`, markdown, the ledger JSON) —
+  the global rule permits docs-only commits straight to the default branch, and on a feature branch it
+  belongs on that branch anyway. If the working tree also holds code changes, commit only the doc
+  paths and name the uncommitted code in the report. **Never push.**
+- **Report** as a plain statement: what changed (ledger diff by id — moved / removed / added), the
+  validator's final exit state with any findings left standing, the commit hash, what was parked, and
+  the single most important thing for the next session's "Where we are."
+- **The last line is a statement, never a question.** End with: *"Close-out complete — safe to
+  `/exit` or `/clear`."*
 
 > Use today's date for all stamps, including the ledger's `updated` field. Preserve each document's
 > established format and voice — these docs are read cold by future contexts, so consistency matters
