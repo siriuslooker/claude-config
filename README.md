@@ -31,7 +31,7 @@ If you add a new tracked path, run `git add -A --dry-run` and read the list befo
 | `commands/` | 12 slash commands — session workflow (`start-session`, `save-context`, `end-session`, `init-project`, `adopt-project`), Jira (`jira-comment`, `jira-attach`, `jira-update`), plus `notify`, `deep-review`, `push-nuget`, `local-env` |
 | `agents/` | The **stack-ops agents**: `implement`, `verify`, `compile`, `test`, `qa`, `deploy` |
 | `skills/` | 16 skills — per-stack (`{compile,test,deploy}-{netcore,node}`, `compile-netfx`, `{compile,qa}-expo-{ios,android}`), plus `stack-detect`, `report-handoff`, `launch-local`, `phase-loop`, `authoring-stack-ops-skills` |
-| `hooks/` | `statusline.sh`, `delegation-standing-request.sh` (restates the standing subagent request each turn), `pwsh-exec.sh` (resolves `pwsh` without trusting `PATH`) |
+| `hooks/` | `statusline.sh`, `pwsh-exec.sh` (resolves `pwsh` without trusting `PATH`) |
 | `tools/` | `notify.ps1` (Pushover), `run-notify.ps1` (wrap a command, push its outcome), `idle-notify.ps1` (push when a turn ends and nobody replies), `bg-task.sh` (make a background task visible in the status line), `reap-stale-dev-servers.ps1`, `find-leaked-dev-procs.ps1` |
 | `setup.ps1`, `setup.sh` | New-machine CLI installers (`gh`, `bb`, `sqlcmd`) — winget / Homebrew+apt |
 

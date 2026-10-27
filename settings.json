@@ -1,5 +1,10 @@
 {
-  "model": "opus",
+  "permissions": {
+    "allow": [
+      "Bash(node ~/.claude/tools/qa-login.js:*)"
+    ]
+  },
+  "model": "opus[1m]",
   "hooks": {
     "SessionStart": [
       {
@@ -15,11 +20,6 @@
     "UserPromptSubmit": [
       {
         "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$HOME/.claude/hooks/delegation-standing-request.sh\"",
-            "timeout": 10
-          },
           {
             "type": "command",
             "command": "bash \"$HOME/.claude/hooks/pwsh-exec.sh\" \"$HOME/.claude/tools/idle-notify.ps1\" -Event Cancel",
@@ -57,6 +57,7 @@
   },
   "enabledPlugins": {},
   "effortLevel": "medium",
+  "autoUpdatesChannel": "latest",
   "tui": "fullscreen",
   "voice": {
     "enabled": true,
@@ -65,7 +66,33 @@
   "skipDangerousModePermissionPrompt": true,
   "theme": "dark",
   "agentPushNotifEnabled": true,
-  "skipAutoPermissionPrompt": true,
   "voiceEnabled": true,
-  "autoUpdatesChannel": "latest"
+  "autoMode": {
+    "environment": [
+      "### Org-wide",
+      "**Organization**: None configured",
+      "**Cloud provider(s)**: None configured",
+      "**Repository visibility**: assume private unless the remote host and repo name indicate otherwise, or a visibility check in the transcript shows public — no remote was found for this repo, so visibility cannot be verified; treat as private by default but note the absence of a remote",
+      "**Internal sharing / snippet hosting**: None configured — treat public paste/gist services as outside the trust boundary",
+      "**Secrets management**: None configured",
+      "**Default / protected branches**: unknown — origin/HEAD unset and no remotes configured; not queryable via gh (no org/repo derivable)",
+      "**CI/CD deploy targets**: None configured",
+      "**Network posture**: None configured",
+      "**Host containment**: None configured — assume Claude Code runs on an ordinary developer machine or CI runner with open internet",
+      "**Source control**: The trusted repo (F:\\Development\\RDMobile\\engagefully-maps) only — no remotes are configured, so there is no remote source-control destination at this time",
+      "**Trusted internal domains**: None configured",
+      "**Trusted cloud buckets**: None configured",
+      "**Key internal services**: None configured",
+      "**Internal package registry**: None configured",
+      "**Sensitive data locations & audiences**: any file or store holding personal data, confidential business data, credentials, regulated data, or similarly sensitive material; preserve exact handles when known and share only with audiences cleared at the [named+specifics] bar",
+      "**Data retention / declassification**: None configured",
+      "**Sensitive remote targets**: any namespace, host, or container whose name carries `prod` or `production` as a whole word or name segment",
+      "**Protected deployment namespaces / environments**: None configured — fall back to the Sensitive remote targets heuristic",
+      "**Protected IaC scopes**: IAM, RBAC, networking, quota, and node-pool resources; anything whose name or tag carries `prod` or `production` as a whole word or name segment",
+      "### User-specific",
+      "**Primary use of Claude Code**: software development",
+      "**Trusted repo**: F:\\Development\\RDMobile\\engagefully-maps (the Engagefully Dynamic Maps project) — no remotes configured; read-only reference clones under src/ (src/eventsential-web, src/engagefully-agent, src/MapsAlive_dotnet48) are gitignored/deny-listed and must not be modified",
+      "**Org-specific CLIs**: None configured — pwsh seen once in this project's transcripts, used for the work-ledger validation tool (docs/backlog.json tooling)"
+    ]
+  }
 }
