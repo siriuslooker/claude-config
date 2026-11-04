@@ -78,6 +78,29 @@ look like source errors. New skills go in `~/.claude/skills/` beside the existin
 
 ---
 
+## Code comments are self-contained (MANDATORY, all repos)
+
+**A code comment never points at a document. It states the pertinent information itself, summarised.**
+Standing rule from the user, 2026-11-04.
+
+- **Never in a comment:** a doc path (`see docs/4-decision-log.md`), a work-order number (`WO-12 §2`), a
+  decision-log, phase-plan or journal entry ("per the 2026-07-30 decision"), a planning or tracker label
+  (`SESS-A4`, `D7-5`, `QA round 3 #16`), or planning-relative phrasing ("this increment", "this phase").
+- **Instead:** write the reason, the constraint, the measured number or the rejected alternative, in a
+  line or three, so a developer who has never seen the planning material understands it.
+- **Test names follow the same rule.** Describe the behaviour, not the ticket or work order that added it.
+- **Allowed:** ticket keys (`EN-1028`) and PR numbers. Every developer on the repo can see Jira and the
+  PRs.
+- **Why:** planning docs move, and harness-held docs are invisible to the code's other developers. When a
+  project's planning was moved out of its code repo, about 280 comment lines and roughly 600 labels were
+  left pointing at nothing, and several of the comments had gone stale against the code without anyone
+  noticing.
+- **How to apply:** put this rule in every `implement` brief. When you touch code that already carries a
+  doc citation, replace it with the summary. Work-order numbers belong in commit messages and the harness,
+  never in source.
+
+---
+
 ## Session workflow
 
 Every project should carry the session commands and the `docs/` scaffold they maintain:
